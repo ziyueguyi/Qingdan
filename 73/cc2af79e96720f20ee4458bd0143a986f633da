@@ -1,0 +1,93 @@
+docs/0.2.1-设置布局验收.md
+  s_7909b70258899a::t_ab1d39351cdc56 1-16
+docs/2026-11-11-功能完善与验收.md
+  s_7909b70258899a::t_2eee2736fe8ef4 1-51
+docs/API-CLI-访问控制方案.md
+  s_7909b70258899a::t_1517d5ee435426 1-66
+docs/清单exe-界面原型.html
+  s_e138a6bb3867a1::t_5b784c8ca5d28c 1-515
+packaging/cli_launcher.cs
+  s_7909b70258899a::t_6189b00fdb9327 1-43
+packaging/entry.py
+  s_7909b70258899a::t_4c29d2900f0a54 1-52
+packaging/qingdan.spec
+  s_7909b70258899a::t_5acc057e84fd63 1-132
+pyproject.toml
+  s_7909b70258899a::t_ad05b47659c18f 1-31
+scripts/dev_catalog_preview.py
+  s_7909b70258899a::t_dd53ab2a26bcad 1-12
+scripts/verify_release.py
+  s_7909b70258899a::t_6d005ec81c28eb 1-139
+src/qingdan/__init__.py
+  s_7909b70258899a::t_12a3f96fe17f0c 1-3
+src/qingdan/__main__.py
+  s_7909b70258899a::t_00588d3fa77700 1-84
+src/qingdan/api/rate_limit.py
+  s_7909b70258899a::t_2f34be475c88b2 1-24
+src/qingdan/api/remote.py
+  s_7909b70258899a::t_9f14d7c2efcfa5 1-115
+src/qingdan/cli.py
+  s_7909b70258899a::t_d66aab90613f97 1-222
+src/qingdan/core/access.py
+  s_7909b70258899a::t_027a5dd88c1ddb 1-349
+src/qingdan/core/context.py
+  s_6b8fc962ff3e09::t_93594c7438bbd3 1-149
+src/qingdan/core/views_api.py
+  s_7909b70258899a::t_2459d8a4c26384 1-186
+src/qingdan/web/access.js
+  s_7909b70258899a::t_e4e60a592b137a 1-134
+src/qingdan/web/catalog.js
+  s_7909b70258899a::t_80bd991d19cd6f 1-54
+tests/test_access.py
+  s_7909b70258899a::t_7d62429e7342db 1-287
+tests/test_authenticated_contract.py
+  s_7909b70258899a::t_9252f3051c7e97 1-69
+tests/test_backup_export.py
+  s_7909b70258899a::t_5eb59c704248d9 1-409
+tests/test_catalog_client.py
+  s_7909b70258899a::t_2ab20520c0dac8 1-53
+tests/test_catalog_paging.py
+  s_7909b70258899a::t_f14b60f5f96424 1-87
+tests/test_cli_contract.py
+  s_7909b70258899a::t_5c77bb85253da9 1-59
+tests/test_cli_running.py
+  s_7909b70258899a::t_872090c9e50d7f 1-68
+tests/test_improvements.py
+  s_7909b70258899a::t_2b49c78a3009ce 1-115
+tests/test_sidebar_catalogs.py
+  s_7909b70258899a::t_ff30c1efd663e0 1-34
+tests/test_time_seam.py
+  s_7909b70258899a::t_287af14bbf6d78 1-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "73cc2af79e96720f20ee4458bd0143a986f633da",
+  "prompts": {},
+  "sessions": {
+    "s_6b8fc962ff3e09": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c093885d-b318-45e7-b385-34b0d8235236",
+        "model": "auto-smart"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    },
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    },
+    "s_e138a6bb3867a1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0168ef7c-0bb0-43f5-9b6f-5fb5eeba80fd",
+        "model": "composer-2.5"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
