@@ -1,0 +1,109 @@
+src/qingdan/web/api.js
+  s_7909b70258899a::t_c5a657bb53aa6b 19-30,33,71
+tests/test_access.py
+  s_7909b70258899a::t_8901b1c8ce4f81 175
+src/qingdan/core/autosync.py
+  s_7909b70258899a::t_0469e65ffda93f 1-91
+android/app/build.gradle
+  s_7909b70258899a::t_2bb8a6ea0b1782 22
+  s_7909b70258899a::t_986a2c7a37d545 1-21,23-53
+src/qingdan/core/access.py
+  s_7909b70258899a::t_b36221a4bccd14 18,30,57-62,130,233-246,317-318,323,331-332,351-352,361-364,367
+  s_7909b70258899a::t_2a1c7b7acd4507 26,80-82,93-94,101-103,112
+  s_7909b70258899a::t_0469e65ffda93f 131
+  s_7909b70258899a::t_8901b1c8ce4f81 90
+docs/0.3.0-开发进度.md
+  s_7909b70258899a::t_d875b5103ea311 1-11,13-15
+  s_7909b70258899a::t_d951f5f6b5c412 12,16
+src/qingdan/web/store.js
+  s_7909b70258899a::t_ab7856e92b19a9 51,185,198
+src/qingdan/web/access.js
+  s_7909b70258899a::t_43b3fafe5c3925 34
+  s_7909b70258899a::t_426c46c0cf91dd 6,23-26,35,37,43-45,51,53,56-64,77,83-85,89-91,102,109-111,119,126-127,133,138-140,153
+tests/test_autosync.py
+  s_7909b70258899a::t_72ebe993b17cf8 1-51
+src/qingdan/web/app.css
+  s_7909b70258899a::t_d59e8e2a7ca180 386-419
+  s_7909b70258899a::t_43b3fafe5c3925 513-525
+scripts/prepare_android.py
+  s_7909b70258899a::t_d59e8e2a7ca180 18-19
+  s_7909b70258899a::t_f6fb66d67a0bd7 1-17,20-21
+src/qingdan/__init__.py
+  s_7909b70258899a::t_783445f0fecfce 3
+src/qingdan/api/tls.py
+  s_7909b70258899a::t_2a1c7b7acd4507 1-52
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidSmokeTest.java
+  s_7909b70258899a::t_783445f0fecfce 36,40
+  s_7909b70258899a::t_222f4fb719891b 1-35,37-39,41-53
+tests/test_access_extended.py
+  s_7909b70258899a::t_8901b1c8ce4f81 1-53
+android/app/src/main/python/qingdan_android.py
+  s_7909b70258899a::t_c5a657bb53aa6b 21-33,40-46
+  s_7909b70258899a::t_f6fb66d67a0bd7 1-20,34-39,47-53
+src/qingdan/api/rate_limit.py
+  s_7909b70258899a::t_b36221a4bccd14 12,17
+android/app/src/main/java/com/ziyueguyi/qingdan/NotificationBridge.java
+  s_7909b70258899a::t_c5a657bb53aa6b 1-17
+android/app/src/main/res/values/styles.xml
+  s_7909b70258899a::t_986a2c7a37d545 1
+.github/workflows/build.yml
+  s_7909b70258899a::t_783445f0fecfce 94-177,179,183,191,193,217
+  s_7909b70258899a::t_d951f5f6b5c412 214
+android/app/src/main/AndroidManifest.xml
+  s_7909b70258899a::t_986a2c7a37d545 1-11
+src/qingdan/web/app.js
+  s_7909b70258899a::t_43b3fafe5c3925 8,535,1273,1283
+  s_7909b70258899a::t_d59e8e2a7ca180 539,1076,1078,1087,1118-1119
+  s_7909b70258899a::t_ab7856e92b19a9 742,746-756,1266-1270
+scripts/create_android_signing.py
+  s_7909b70258899a::t_2bb8a6ea0b1782 1-36
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_43b3fafe5c3925 10-13,261-264
+  s_7909b70258899a::t_ab7856e92b19a9 44-46,295-297
+src/qingdan/core/secrets.py
+  s_7909b70258899a::t_b97af90f0390e0 18-24,56-58,79-82,101
+android/build.gradle
+  s_7909b70258899a::t_986a2c7a37d545 1-4
+src/qingdan/api/remote.py
+  s_7909b70258899a::t_2a1c7b7acd4507 107-150
+src/qingdan/api/http.py
+  s_7909b70258899a::t_b36221a4bccd14 36,167-169
+src/qingdan/__main__.py
+  s_7909b70258899a::t_0469e65ffda93f 56-57,67
+android/app/src/main/java/com/ziyueguyi/qingdan/MainActivity.java
+  s_7909b70258899a::t_c5a657bb53aa6b 1-76
+android/gradle.properties
+  s_7909b70258899a::t_986a2c7a37d545 1-3
+src/qingdan/shell/app.py
+  s_7909b70258899a::t_ab7856e92b19a9 118-119,157
+src/qingdan/bootstrap.py
+  s_7909b70258899a::t_0469e65ffda93f 10
+android/settings.gradle
+  s_7909b70258899a::t_986a2c7a37d545 1-4
+.gitignore
+  s_7909b70258899a::t_2bb8a6ea0b1782 14
+  s_7909b70258899a::t_f6fb66d67a0bd7 9-13
+android/app/src/main/java/com/ziyueguyi/qingdan/QingdanApplication.java
+  s_7909b70258899a::t_c5a657bb53aa6b 3-7
+  s_7909b70258899a::t_501e8d556dad4a 1-2
+android/app/src/main/java/com/ziyueguyi/qingdan/SecureStore.java
+  s_7909b70258899a::t_12922c0ae51d74 1-30
+android/app/src/main/res/xml/file_paths.xml
+  s_7909b70258899a::t_5a39b50dff1105 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "88ab3d14cfb32c4b1f2b8aef36e52647611de4ad",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
