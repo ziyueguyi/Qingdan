@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
         });
         web.addJavascriptInterface(new NativeApi(),"QingdanAndroid");
         web.loadUrl(HOME);SyncWorker.install(this);
+        if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,this::handleBack);
         if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},8);
     }
     public WebView getWebView(){return web;}
@@ -69,7 +70,8 @@ public class MainActivity extends Activity {
         }
     }
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==7&&fileCallback!=null){fileCallback.onReceiveValue(result==RESULT_OK&&data!=null?new Uri[]{data.getData()}:null);fileCallback=null;}}
-    @Override public void onBackPressed(){web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}const m=document.getElementById('mask');if(m&&!m.hidden){m.hidden=true;return true;}return false;})()",handled->{if(!"true".equals(handled))super.onBackPressed();});}
+    private void handleBack(){web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}const m=document.getElementById('mask');if(m&&!m.hidden){const b=m.querySelector('[data-act=close-modal]');if(b)b.click();else m.hidden=true;return true;}const a=document.getElementById('app');if(a.classList.contains('phone-detail')){a.classList.remove('phone-detail');return true;}if(a.classList.contains('phone-nav')){a.classList.remove('phone-nav');return true;}return false;})()",handled->{if(!"true".equals(handled))finish();});}
+    @Override public void onBackPressed(){handleBack();}
     @Override protected void onResume(){super.onResume();if(!executor.isShutdown())executor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":true}"));}
     @Override protected void onPause(){super.onPause();if(!executor.isShutdown())executor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":false}"));}
     @Override protected void onDestroy(){if(fileCallback!=null)fileCallback.onReceiveValue(null);executor.shutdown();web.removeJavascriptInterface("QingdanAndroid");web.destroy();super.onDestroy();}

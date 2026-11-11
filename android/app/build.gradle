@@ -1,4 +1,7 @@
 plugins { id 'com.android.application'; id 'com.chaquo.python' }
+def versionMatcher = (file('../../pyproject.toml').text =~ /(?m)^version = "([^"]+)"/)
+def sharedVersion = versionMatcher[0][1]
+def versionParts = sharedVersion.split('\\.').collect { it.toInteger() }
 
 android {
     namespace 'com.ziyueguyi.qingdan'
@@ -7,8 +10,8 @@ android {
         applicationId 'com.ziyueguyi.qingdan'
         minSdk 24
         targetSdk 37
-        versionCode 30000
-        versionName '0.3.0'
+        versionCode versionParts[0]*1000000 + versionParts[1]*1000 + versionParts[2]
+        versionName sharedVersion
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     flavorDimensions 'architecture'
