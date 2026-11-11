@@ -37,6 +37,12 @@ EXCLUDES = [
     "numpy", "pandas",
     "pytest", "pygments",
     "dulwich.tests",
+    # Application backups/exports use SQLite/JSON/CSV; Git packs use zlib.
+    # Python 3.14 shutil/tarfile gracefully handle missing optional Zstandard.
+    # Keep gzip/zip/zlib and HTTPS; omit only unused .tar.zst support (~0.5 MB).
+    "compression.zstd", "_zstd",
+    # Icons use PNG/ICO/BMP with no ICC profile conversion. Keep Image itself.
+    "PIL.ImageCms", "PIL._imagingcms",
     # Pillow 只为托盘图标服务。它默认会拖进 ~10MB 的图片格式解码器，
     # 其中 _avif 单独就 7.5MB —— 实测体积从 37MB 冲到 48MB 直接顶破门禁。
     #
@@ -130,3 +136,4 @@ coll = COLLECT(
     ],
     name="Qingdan",
 )
+
