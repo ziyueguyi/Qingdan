@@ -7,7 +7,10 @@
 
 const DICT = {
   zh: {
-    tab_access: "API / CLI",
+    tab_access: "API", tab_cli: "CLI",
+    api_http_plain: "HTTP（无需证书）", api_http_port: "HTTP 端口", api_certificate_mode: "证书方式",
+    api_auto_cert: "自动生成自签名证书", api_import_cert: "导入已有证书", api_auto_cert_note: "自动证书无需购买或上传，首次启用时在数据目录生成；客户端需信任该证书。HTTP 无需证书，Token 仍须提供。",
+    api_token_col: "Token", api_call_stats: "调用统计", api_qps: "频率（QPS）", api_call_limit: "调用限制", api_created: "创建时间", api_recent: "最近使用", api_status_col: "状态", api_note: "备注", api_actions: "操作", api_unlimited: "无限制", api_quota_reached: "次数已用尽",
     api_feature_count: "{n} 个功能接口",
     api_perm_read: "读取",
     api_perm_create: "新增（写入）",
@@ -38,6 +41,9 @@ const DICT = {
     api_key: "私钥 PEM 路径",
     api_http_note: "HTTP 会明文传输 Token，请仅在受信任局域网或加密网络内使用；其他场景请选择 HTTPS。",
     api_limits: "请求限制",
+    auto_sync_title: "定时增量同步", auto_sync_enabled: "启用定时同步", auto_sync_mode: "执行方式",
+    auto_sync_interval: "按间隔", auto_sync_daily: "每天指定时间", auto_sync_minutes: "间隔（分钟）", auto_sync_times: "时间点（HH:mm）",
+    auto_sync_next: "下次同步", auto_sync_last: "上次成功", auto_sync_note: "拉取远程变更并推送所有类型的本地增量。时间点用逗号分隔，按设备本地时间执行；安卓后台可能因省电或断网延后。",
     api_call_example: "连接说明与调用示例",
     api_rate: "每分钟请求数",
     api_body_limit: "请求体上限 KB",
@@ -252,7 +258,10 @@ const DICT = {
     data_dir: "数据目录",
   },
   en: {
-    tab_access: "API / CLI",
+    tab_access: "API", tab_cli: "CLI",
+    api_http_plain: "HTTP (no certificate)", api_http_port: "HTTP port", api_certificate_mode: "Certificate mode",
+    api_auto_cert: "Generate self-signed certificate", api_import_cert: "Import certificate", api_auto_cert_note: "Automatic certificates are generated in the data folder on first use; clients must trust them. HTTP needs no certificate. Both modes still require a token.",
+    api_token_col: "Token", api_call_stats: "Calls", api_qps: "Rate (QPS)", api_call_limit: "Call quota", api_created: "Created", api_recent: "Last used", api_status_col: "Status", api_note: "Note", api_actions: "Actions", api_unlimited: "Unlimited", api_quota_reached: "Quota exhausted",
     api_feature_count: "{n} feature endpoints",
     api_perm_read: "Read",
     api_perm_create: "Create / write",
@@ -283,6 +292,9 @@ const DICT = {
     api_key: "Private key PEM path",
     api_http_note: "HTTP sends tokens without encryption. Use it only on a trusted LAN or encrypted network; otherwise choose HTTPS.",
     api_limits: "Request limits",
+    auto_sync_title: "Scheduled incremental sync", auto_sync_enabled: "Enable schedule", auto_sync_mode: "Schedule mode",
+    auto_sync_interval: "Interval", auto_sync_daily: "Daily times", auto_sync_minutes: "Interval (minutes)", auto_sync_times: "Times (HH:mm)",
+    auto_sync_next: "Next sync", auto_sync_last: "Last success", auto_sync_note: "Pull remote changes and push local increments of every item type. Separate daily times with commas; uses device local time. Android may defer background work while offline or saving power.",
     api_call_example: "Connection guide and request example",
     api_rate: "Requests / minute",
     api_body_limit: "Body limit KB",

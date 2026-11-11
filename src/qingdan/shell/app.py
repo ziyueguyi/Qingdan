@@ -115,6 +115,8 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
         print(f"[shell] 已纠正过期的开机自启路径：{repaired}", flush=True)
 
     scheduler.start()          # 提醒调度跟着进程活着
+    from qingdan.core.autosync import loop as auto_sync
+    auto_sync.start()
 
     window = webview.create_window(
         "清单", f"http://127.0.0.1:{port}/",
@@ -152,6 +154,7 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
         webview.start(on_ready, gui="edgechromium", debug=False)
     finally:
         remote.close()
+        auto_sync.stop()
         set_tray_notifier(None)
         tray.stop()
         scheduler.stop()

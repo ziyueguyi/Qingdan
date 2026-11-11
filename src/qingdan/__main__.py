@@ -53,6 +53,8 @@ def serve(data_dir: str | None = None, host: str = "127.0.0.1") -> int:
     # 提醒只在进程存活时生效；服务端兜底见 §12.5（M7）。
     # start() 内部会先把过期作业标 skipped，避免开机瞬间涌出历史提醒。
     scheduler.start()
+    from qingdan.core.autosync import loop as auto_sync
+    auto_sync.start()
     from qingdan.api.remote import install_remote
     remote = install_remote()
 
@@ -62,6 +64,7 @@ def serve(data_dir: str | None = None, host: str = "127.0.0.1") -> int:
         uvicorn.run(build_app(), host=host, port=port, log_level="warning", log_config=None, proxy_headers=False)
     finally:
         remote.close()
+        auto_sync.stop()
         scheduler.stop()
         lock.release()
     return 0

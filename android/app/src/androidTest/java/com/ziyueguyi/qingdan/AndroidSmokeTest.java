@@ -1,0 +1,53 @@
+package com.ziyueguyi.qingdan;
+import android.content.Context;
+import android.os.Build;
+import androidx.test.core.app.ActivityScenario;
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.json.JSONObject;
+import static org.junit.Assert.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+@RunWith(AndroidJUnit4.class)
+public class AndroidSmokeTest {
+    private Context context(){return InstrumentationRegistry.getInstrumentation().getTargetContext();}
+    private JSONObject call(String name,String params) throws Exception {
+        JSONObject result=new JSONObject(RuntimeBridge.invoke(context(),name,params));
+        assertTrue(result.toString(),result.getBoolean("ok"));return result.getJSONObject("data");
+    }
+    @Test public void offlineCrudKeystoreAndUi() throws Exception {
+        if(Build.VERSION.SDK_INT>=33)InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context().getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
+        JSONObject group=call("group.create","{\"name\":\"Android list\",\"icon\":\"⭐\"}");
+        JSONObject task=call("task.create",new JSONObject().put("title","Android smoke task").put("list_id",group.getString("id")).put("due_at","2027-01-31T09:00:00").put("repeat","monthly").toString());
+        JSONObject advanced=call("task.complete",new JSONObject().put("item_id",task.getString("id")).toString());
+        assertEquals("2027-02-28T09:00:00",advanced.getJSONObject("data").getString("due_at"));
+        String encrypted=SecureStore.encrypt("local-test-secret");
+        assertFalse(encrypted.contains("local-test-secret"));assertEquals("local-test-secret",SecureStore.decrypt(encrypted));
+        JSONObject schedule=call("autosync.config_set","{\"enabled\":true,\"mode\":\"daily\",\"times\":[\"09:00\",\"18:00\"]}");
+        assertEquals(15,schedule.getInt("minimum_interval_minutes"));assertTrue(schedule.getJSONObject("status").getLong("next_at")>0);
+        call("autosync.config_set","{\"enabled\":false}");
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            boolean ready=false;
+            for(int i=0;i<60;i++){
+                String state=js(scenario,"Boolean(document.querySelector('[data-view=inbox]'))");
+                if("true".equals(state)){ready=true;break;}Thread.sleep(500);
+            }
+            assertTrue("Offline frontend did not boot",ready);
+            js(scenario,"document.querySelector('[data-view=inbox]').click();true");
+            boolean visible=false;
+            for(int i=0;i<30;i++){if("true".equals(js(scenario,"document.body.innerText.includes('Android smoke task')"))){visible=true;break;}Thread.sleep(300);}
+            assertTrue("Android bridge did not render saved task",visible);
+            assertEquals("true",js(scenario,"document.documentElement.dataset.platform==='android'"));
+            assertEquals("true",js(scenario,"document.querySelector('.main').getBoundingClientRect().width<=innerWidth"));
+        }
+    }
+    private String js(ActivityScenario<MainActivity> scenario,String script) throws Exception {
+        AtomicReference<String> value=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
+        scenario.onActivity(a->a.getWebView().evaluateJavascript(script,result->{value.set(result);done.countDown();}));
+        assertTrue("JS callback timed out",done.await(10,TimeUnit.SECONDS));return value.get();
+    }
+}

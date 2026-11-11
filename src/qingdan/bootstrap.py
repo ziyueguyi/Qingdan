@@ -7,6 +7,7 @@
 渠道适配器在接口导入之后注册：alert_api 只按名字查注册表，注册顺序不影响接口存在性。
 """
 from qingdan.core import access as _access                # noqa: F401
+from qingdan.core import autosync as _autosync            # noqa: F401
 from qingdan.core import alert_api as _alert_api          # noqa: F401
 from qingdan.core import autostart as _autostart          # noqa: F401
 from qingdan.core import backup as _backup                # noqa: F401

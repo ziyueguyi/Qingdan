@@ -6,6 +6,12 @@ buildtmp/
 dist/
 __pycache__/
 *.egg-info/
+android/.gradle/
+android/**/build/
+android/local.properties
+*.keystore
+*.jks
+.private/
 *.pyc
 *.pyo
 

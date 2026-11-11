@@ -104,8 +104,50 @@ class RemoteServer:
         access.set_runtime()
 
 
-def install_remote() -> RemoteServer:
-    manager=RemoteServer()
+class RemoteGateway:
+    """One or two authenticated listeners, switched together with rollback."""
+    def __init__(self):self.members=[];self.config=None;self.error=None;self.lock=threading.Lock()
+    def status(self):
+        states=[s.status() for s in self.members]
+        return {'available':True,'running':bool(states) and all(s['running'] for s in states),'error_code':self.error,'listeners':states}
+    def _start(self,value):
+        self.members=[]
+        if not value['enabled']:return
+        if value['transport']!='http' and value['auto_tls']:
+            from qingdan.api.tls import ensure_certificate
+            value['tls_cert'],value['tls_key']=ensure_certificate(value['host'])
+        transports=['https','http'] if value['transport']=='both' else [value['transport']]
+        try:
+            for mode in transports:
+                member=RemoteServer();self.members.append(member)
+                member.apply({**value,'transport':mode,'port':value['http_port'] if mode=='http' and value['transport']=='both' else value['port']})
+        except Exception:
+            self._stop();raise
+    def _stop(self):
+        for member in self.members:
+            with member._lock:member._stop()
+        self.members=[]
+    def apply(self,value):
+        with self.lock:
+            previous=self.config
+            try:
+                self._stop();self._start(value);self.config=dict(value);self.error=None
+            except Exception as error:
+                self.error='start_failed'
+                if previous:
+                    try:self._stop();self._start(dict(previous))
+                    except Exception:self.error='rollback_failed'
+                raise QdError('REMOTE_START_FAILED',f'远程监听切换失败：{error}',409) from error
+        return self.status()
+    def close(self):
+        with self.lock:
+            for member in self.members:member.close()
+            self.members=[]
+        access.set_runtime()
+
+
+def install_remote() -> RemoteGateway:
+    manager=RemoteGateway()
     access.set_runtime(manager.apply,manager.status)
     try:
         manager.apply(access.get_config())

@@ -91,12 +91,96 @@ jobs:
           path: buildtmp/test-results.xml
           if-no-files-found: ignore
 
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+    env:
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - uses: android-actions/setup-android@v3
+      - name: Prepare shared Android runtime
+        run: |
+          python -m pip install 'dulwich==1.2.21'
+          python scripts/prepare_android.py
+      - name: Load persistent signing identity
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/qingdan-release.p12"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/qingdan-release.p12" >> "$GITHUB_ENV"
+            echo 'signed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'signed=false' >> "$GITHUB_OUTPUT"
+            echo 'Signing secrets absent; only an unsigned validation APK will be produced.'
+          fi
+      - name: Build phone and emulator APKs
+        working-directory: android
+        run: gradle assembleArm64Release assembleEmulatorDebug --stacktrace
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify offline Android app on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: cd android && gradle connectedEmulatorDebugAndroidTest --stacktrace
+      - name: Package Android download
+        run: |
+          mkdir -p android-download
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          apk=$(find android/app/build/outputs/apk/arm64/release -name '*.apk' | head -1)
+          suffix=''
+          if [[ '${{ steps.signing.outputs.signed }}' != true ]]; then suffix='-unsigned'; fi
+          name="Qingdan-$version-android-arm64$suffix.apk"
+          cp "$apk" "android-download/$name"
+          (cd android-download && sha256sum "$name" > "$name.sha256")
+          if [[ '${{ steps.signing.outputs.signed }}' == true ]]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "android-download/$name"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Qingdan-android-arm64
+          path: android-download/*
+          if-no-files-found: error
+      - name: Android test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: |
+            android/app/build/reports/androidTests
+            android/app/build/outputs/androidTest-results
+          if-no-files-found: ignore
+
   release:
-    needs: build
+    needs: [build, android]
     concurrency:
       group: release-${{ needs.build.outputs.version }}
       cancel-in-progress: false
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    if: needs.android.outputs.signed == 'true' && github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -104,8 +188,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: Qingdan-windows-x64
+          pattern: Qingdan-*
           path: release-files
+          merge-multiple: true
 
       - name: Publish version to Releases
         env:
@@ -126,9 +211,9 @@ jobs:
               exit 0
             fi
           else
-            printf '%s\n' 'Windows x64 便携版。' '' '下载 Assets 中名称含 windows-x64 的 ZIP，解压后保留整个 Qingdan 文件夹，运行 Qingdan.exe。命令行入口为 QingdanCLI.exe。' '' 'SHA-256 校验文件与体积报告一并提供。Source code 是源码，不是运行包。' > release-notes.md
+            printf '%s\n' 'Windows x64 与 Android 64 位版本。' '' 'Windows：下载 windows-x64 ZIP，解压后保留整个 Qingdan 文件夹，运行 Qingdan.exe。Android：下载 android-arm64 APK，在手机安装。' '' '支持可配置时间的定时增量同步。安卓后台执行可能因省电或断网延后。SHA-256 校验文件一并提供；Source code 是源码，不是运行包。' > release-notes.md
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "清单 $VERSION" --notes-file release-notes.md --draft
           fi
-          gh release upload "$tag" release-files/*.zip release-files/*.sha256 release-files/SIZE.json --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$tag" release-files/*.zip release-files/*.apk release-files/*.sha256 release-files/SIZE.json --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
 

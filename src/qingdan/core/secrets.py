@@ -15,6 +15,13 @@ import ctypes.wintypes as wt
 
 CRYPTPROTECT_UI_FORBIDDEN = 0x01
 _DEFAULT_ENTROPY = b"qingdan.secrets.v1"
+_PLATFORM_BACKEND = None
+
+
+def set_backend(backend=None):
+    """Host-provided OS keystore; desktop retains DPAPI by default."""
+    global _PLATFORM_BACKEND
+    _PLATFORM_BACKEND=backend
 
 
 class _DataBlob(ctypes.Structure):
@@ -46,6 +53,9 @@ def protect(plaintext: str, entropy: bytes = _DEFAULT_ENTROPY) -> str:
     """明文 → `dpapi:` 前缀的 base64 密文。空串原样返回空串。"""
     if plaintext == "":
         return ""
+    if _PLATFORM_BACKEND is not None:
+        try:return _PLATFORM_BACKEND.protect(plaintext)
+        except Exception as e:raise SecretsUnavailable('系统凭据加密失败') from e
     api = _crypt32()
     in_blob, _keep1 = _to_blob(plaintext.encode("utf-8"))
     ent_blob, _keep2 = _to_blob(entropy)
@@ -66,6 +76,10 @@ def unprotect(token: str, entropy: bytes = _DEFAULT_ENTROPY) -> str:
     """`protect` 的逆操作。非 dpapi: 前缀视为明文（兼容手工调试写入的值）。"""
     if token == "":
         return ""
+    if token.startswith('android:'):
+        if _PLATFORM_BACKEND is None:raise SecretsUnavailable('此凭据只能在原安卓设备解密')
+        try:return _PLATFORM_BACKEND.unprotect(token)
+        except Exception as e:raise SecretsUnavailable('安卓凭据解密失败，请重新填写') from e
     if not token.startswith("dpapi:"):
         return token
     raw = base64.b64decode(token[len("dpapi:"):])
@@ -84,7 +98,7 @@ def unprotect(token: str, entropy: bytes = _DEFAULT_ENTROPY) -> str:
 
 
 def is_secret_value(value: str | None) -> bool:
-    return bool(value) and value.startswith("dpapi:")
+    return bool(value) and value.startswith(("dpapi:","android:"))
 
 
 def mask(value: str | None, keep: int = 0) -> str:

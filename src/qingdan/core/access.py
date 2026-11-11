@@ -15,6 +15,7 @@ import secrets
 import sqlite3
 import ssl
 import time
+import threading
 from typing import Callable
 
 from qingdan.core.context import ctx
@@ -22,10 +23,11 @@ from qingdan.core.registry import REGISTRY, QdError, feature, not_found, validat
 
 PERMISSIONS = ('read', 'create', 'update', 'delete', 'execute')
 DEFAULTS = {'enabled': False, 'host': '0.0.0.0', 'port': 19527,
-            'transport': 'https', 'tls_cert': '', 'tls_key': '',
+            'transport': 'https', 'http_port':19528,'auto_tls':True,'tls_cert': '', 'tls_key': '',
             'requests_per_minute': 120, 'max_body_kb': 1024}
 _RUNTIME_APPLY: Callable | None = None
 _RUNTIME_STATUS: Callable | None = None
+_SCHEMA_LOCK = threading.Lock()
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS config (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS api_token (
@@ -52,7 +54,12 @@ def db():
     connection.row_factory = sqlite3.Row
     try:
         connection.execute('PRAGMA journal_mode=WAL')
-        connection.executescript(SCHEMA)
+        with _SCHEMA_LOCK:
+            connection.executescript(SCHEMA)
+            columns={r[1] for r in connection.execute('PRAGMA table_info(api_token)')}
+            for name,definition in {'max_qps':'INTEGER NOT NULL DEFAULT 10','max_calls':'INTEGER','call_count':'INTEGER NOT NULL DEFAULT 0','note':"TEXT NOT NULL DEFAULT ''"}.items():
+                if name not in columns:connection.execute(f'ALTER TABLE api_token ADD COLUMN {name} {definition}')
+            connection.commit()
         yield connection
         connection.commit()
     except Exception:
@@ -70,7 +77,9 @@ def set_runtime(apply: Callable | None = None, status: Callable | None = None):
 def get_config() -> dict:
     with db() as con:
         row = con.execute("SELECT v FROM config WHERE k='remote'").fetchone()
-    return {**DEFAULTS, **(json.loads(row['v']) if row else {})}
+    saved=json.loads(row['v']) if row else {}
+    if 'auto_tls' not in saved and saved.get('tls_cert'):saved['auto_tls']=False
+    return {**DEFAULTS, **saved}
 
 
 def validate_config(value: dict) -> dict:
@@ -78,17 +87,20 @@ def validate_config(value: dict) -> dict:
     if unknown:
         raise validation_error('不支持的访问配置', fields=sorted(unknown))
     cfg = {**get_config(), **value}
+    if 'auto_tls' not in value and (value.get('tls_cert') or value.get('tls_key')):cfg['auto_tls']=False
     if type(cfg['enabled']) is not bool:
         raise validation_error('enabled 必须是布尔值')
-    for key, low, high in (('port',1,65535),('requests_per_minute',10,6000),('max_body_kb',1,32768)):
+    if type(cfg['auto_tls']) is not bool:raise validation_error('auto_tls 必须是布尔值')
+    for key, low, high in (('port',1,65535),('http_port',1,65535),('requests_per_minute',10,6000),('max_body_kb',1,32768)):
         if type(cfg[key]) is not int or not low <= cfg[key] <= high:
             raise validation_error(f'{key} 需在 {low}..{high}')
     try:
         ipaddress.ip_address(cfg['host'])
     except (ValueError, TypeError):
         raise validation_error('监听地址必须是 IPv4 或 IPv6 地址') from None
-    if not isinstance(cfg['transport'],str) or cfg['transport'] not in {'https','http'}:
-        raise validation_error('transport 只能是 https|http')
+    if not isinstance(cfg['transport'],str) or cfg['transport'] not in {'https','http','both'}:
+        raise validation_error('transport 只能是 https|http|both')
+    if cfg['transport']=='both' and cfg['port']==cfg['http_port']:raise validation_error('HTTP 和 HTTPS 端口不能相同')
     for key in ('tls_cert','tls_key'):
         if not isinstance(cfg[key],str):
             raise validation_error(f'{key} 必须是文件路径')
@@ -97,7 +109,7 @@ def validate_config(value: dict) -> dict:
             path=Path(cfg[key]).expanduser()
             if not path.is_absolute(): path=Path(ctx.data_dir)/path
             cfg[key]=str(path.resolve())
-    if cfg['enabled'] and cfg['transport']=='https':
+    if cfg['enabled'] and cfg['transport']!='http' and not cfg['auto_tls']:
         if not cfg['tls_cert'] or not cfg['tls_key']:
             raise validation_error('启用 HTTPS 前需配置 PEM 证书和私钥')
         try:
@@ -115,6 +127,8 @@ def policy(name: str, raw: dict | None = None) -> set[str] | None:
     if group in {'access','auth'} or name.startswith('app.autostart') or name=='app.instance_status':
         return None
     special = {
+        'autosync.config_set': {'create','update','delete','execute'},
+        'autosync.tick': {'create','update','delete','execute'},
         'data.import': {'create','update','delete'},
         'data.export': {'read','create'},
         'undo.last': {'create','update','delete'},
@@ -216,7 +230,20 @@ def _public(row) -> dict:
             'created_at_ms':row['created_at'],'expires_at_ms':row['expires_at'],
             'revoked':bool(row['revoked']),
             'expired':row['expires_at'] is not None and row['expires_at']<=now_ms(),
-            'last_used_ms':row['last_used'],'last_client':row['last_client']}
+            'last_used_ms':row['last_used'],'last_client':row['last_client'],
+            'max_qps':row['max_qps'],'max_calls':row['max_calls'],'call_count':row['call_count'],'note':row['note']}
+
+
+def _limits(qps,quota,note):
+    if type(qps) is not int or not 1<=qps<=1000:raise validation_error('QPS 需为 1..1000')
+    if quota is not None and (type(quota) is not int or not 1<=quota<=1_000_000_000):raise validation_error('调用限制需为正整数或空值（无限制）')
+    if not isinstance(note,str) or len(note)>500:raise validation_error('备注不能超过 500 个字符')
+
+
+def reserve_call(token_id,client):
+    with db() as con:
+        updated=con.execute('UPDATE api_token SET call_count=call_count+1,last_used=?,last_client=? WHERE id=? AND revoked=0 AND (expires_at IS NULL OR expires_at>?) AND (max_calls IS NULL OR call_count<max_calls)',(now_ms(),client,token_id,now_ms()))
+        if not updated.rowcount:raise QdError('TOKEN_QUOTA_EXHAUSTED','Token 调用次数已达上限或已失效',429)
 
 
 def authenticate(raw: str, client: str = '') -> dict:
@@ -287,17 +314,21 @@ def catalog() -> dict:
 
 @feature(name='access.token_create',group='access',http=('POST','/api/v1/access/tokens'))
 def token_create(name: str, permissions: list | None = None, features: list | None = None,
-                 expires_at: str | None = None, never_expires: bool = False) -> dict:
+                 expires_at: str | None = None, never_expires: bool = False,
+                 max_qps: int=10,max_calls: int | None=None,note: str='') -> dict:
     if not isinstance(name,str) or not name.strip() or len(name.strip())>100:
         raise validation_error('Token 名称需为 1..100 个字符')
     permissions,features = _scopes(permissions),_features(features)
     expiry = _expiry(expires_at,never_expires)
+    _limits(max_qps,max_calls,note)
     token_id=secrets.token_hex(16)
     raw='qd_'+token_id+'.'+secrets.token_urlsafe(32)
     with db() as con:
         con.execute('INSERT INTO api_token(id,digest,name,permissions,features,created_at,expires_at) VALUES (?,?,?,?,?,?,?)',
                     (token_id,hashlib.sha256(raw.encode()).hexdigest(),name.strip(),
                      json.dumps(permissions),json.dumps(features),now_ms(),expiry))
+        item=_public(con.execute('SELECT * FROM api_token WHERE id=?',(token_id,)).fetchone())
+        con.execute('UPDATE api_token SET max_qps=?,max_calls=?,note=? WHERE id=?',(max_qps,max_calls,note,token_id))
         item=_public(con.execute('SELECT * FROM api_token WHERE id=?',(token_id,)).fetchone())
     return {'token':raw,'item':item,'one_time':True}
 
@@ -317,7 +348,8 @@ def token_list(limit: int = 5, offset: int = 0, include_revoked: bool = False) -
 @feature(name='access.token_update',group='access',http=('PATCH','/api/v1/access/tokens/{token_id}'))
 def token_update(token_id: str, name: str | None = None, permissions: list | None = None,
                  features: list | None = None, expires_at: str | None = None,
-                 never_expires: bool | None = None) -> dict:
+                 never_expires: bool | None = None,max_qps: int | None=None,max_calls: int | None=None,
+                 unlimited_calls: bool=False,note: str | None=None) -> dict:
     with db() as con:
         row=con.execute('SELECT * FROM api_token WHERE id=?',(token_id,)).fetchone()
         if row is None: raise not_found('API Token')
@@ -326,8 +358,13 @@ def token_update(token_id: str, name: str | None = None, permissions: list | Non
         p=_scopes(permissions) if permissions is not None else json.loads(row['permissions'])
         f=_features(features) if features is not None else json.loads(row['features'])
         expiry=_expiry(expires_at,bool(never_expires)) if expires_at is not None or never_expires is not None else row['expires_at']
+        qps=row['max_qps'] if max_qps is None else max_qps
+        quota=None if unlimited_calls else row['max_calls'] if max_calls is None else max_calls
+        remark=row['note'] if note is None else note
+        _limits(qps,quota,remark)
         con.execute('UPDATE api_token SET name=?,permissions=?,features=?,expires_at=? WHERE id=?',
                     (name.strip() if name is not None else row['name'],json.dumps(p),json.dumps(f),expiry,token_id))
+        con.execute('UPDATE api_token SET max_qps=?,max_calls=?,note=? WHERE id=?',(qps,quota,remark,token_id))
         return {'item':_public(con.execute('SELECT * FROM api_token WHERE id=?',(token_id,)).fetchone())}
 
 

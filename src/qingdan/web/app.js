@@ -5,7 +5,7 @@
  *  · 所有用户数据经 esc() 输出 —— 任务标题里写个 <img> 不该把页面弄坏。
  */
 import { catalogs, catalogItems, subscribeCatalog, scrollCatalog, PAGE_SIZE, ROW_HEIGHT } from "./catalog.js";
-import { configureAccessUI, loadAccess, renderAccessTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
+import { configureAccessUI, loadAccess, renderAccessTab, renderCliTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
 import { call, hasFeature, loadFeatures, featureCount } from "./api.js";
 import { t, setLang, locale } from "./i18n.js";
 import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError } from "./store.js";
@@ -532,10 +532,11 @@ function openSettings(tab = "appearance") {
     data: renderDataTab(),
     sync: renderSyncTab(),
     access: renderAccessTab(),
+    cli: renderCliTab(),
   }[tab];
 
   const settingsTabs = [["appearance", "tab_appearance", "◐"], ["lang", "tab_lang", "◎"],
-    ["alert", "tab_alert", "♧"], ["data", "tab_data", "▤"], ["sync", "tab_sync", "↻"], ["access", "tab_access", "⌘"]];
+    ["alert", "tab_alert", "♧"], ["data", "tab_data", "▤"], ["sync", "tab_sync", "↻"], ["access", "tab_access", "⌘"], ["cli", "tab_cli", ">_"]].filter(x=>!globalThis.QingdanAndroid||!['access','cli'].includes(x[0]));
   openModal(`
     <div class="mh">${esc(t("settings"))}<button class="iconbtn" data-act="close-modal">✕</button></div>
     <div class="settings-layout"><nav class="tabs settings-nav" aria-label="${esc(t('settings'))}">${settingsTabs.map(([k, l, icon]) =>
@@ -738,7 +739,19 @@ function renderSyncTab() {
       <div class="ctl desc">${esc(t("sentinel_d"))}</div></div>
     <div class="field"><label>${esc(t("bootstrap"))}</label>
       <div class="ctl desc">${esc(t("bootstrap_d"))}</div></div>
+    ${renderAutoSync()}
     <div class="hint">${esc(t("sync_delete_note"))}</div>`;
+}
+
+function renderAutoSync() {
+  const a=state.autoSync;if(!a)return '';
+  const c=a.config,s=a.status;
+  return `<section class="api-section"><h3>${esc(t('auto_sync_title'))}</h3><div class="field"><label for="auto-sync-enabled">${esc(t('auto_sync_enabled'))}</label><input id="auto-sync-enabled" type="checkbox" ${c.enabled?'checked':''}></div>
+    <div class="field"><label>${esc(t('auto_sync_mode'))}</label><select class="ctl" id="auto-sync-mode"><option value="interval" ${c.mode==='interval'?'selected':''}>${esc(t('auto_sync_interval'))}</option><option value="daily" ${c.mode==='daily'?'selected':''}>${esc(t('auto_sync_daily'))}</option></select></div>
+    <div class="field"><label>${esc(t('auto_sync_minutes'))}</label><input class="ctl" type="number" id="auto-sync-minutes" min="${a.minimum_interval_minutes}" max="10080" value="${c.interval_minutes}"></div>
+    <div class="field"><label>${esc(t('auto_sync_times'))}</label><input class="ctl" id="auto-sync-times" value="${esc(c.times.join(', '))}" placeholder="09:00, 18:00"></div>
+    <p class="desc">${esc(t('auto_sync_note'))}</p><p class="desc">${esc(t('auto_sync_next'))}: ${s.next_at?esc(new Date(s.next_at).toLocaleString(locale())):'—'}</p><p class="desc">${esc(t('auto_sync_last'))}: ${s.last_success_at?esc(new Date(s.last_success_at).toLocaleString(locale())):'—'} ${esc(s.error_code||'')}</p>
+    <div class="btnrow"><button class="btn pri" data-act="auto-sync-save">${esc(t('save'))}</button></div></section>`;
 }
 
 // 后端只回机器键，文案在这里配（拼键名的写法会被 i18n 静态扫描漏掉，所以用显式表）。
@@ -1060,7 +1073,9 @@ async function onClick(ev) {
   if (a.startsWith('access-')) { await handleAccessAction(el); return; }
 
   switch (a) {
+    case "mobile-nav": document.getElementById('app').classList.toggle('phone-nav'); break;
     case "view":
+      document.getElementById('app').classList.remove('phone-nav');
       patch({ searchQ: "", view, layout: state.layout === "calendar" ? "list" : state.layout });
       await saveViewPrefs(); await loadAll();
       break;
@@ -1069,7 +1084,7 @@ async function onClick(ev) {
       patch({ layout: v }); await saveViewPrefs(); await loadAll(); break;
     case "reverse":
       patch({ reverse: !state.reverse }); await saveViewPrefs(); await loadAll(); break;
-    case "open": select(id); break;
+    case "open": if(globalThis.QingdanAndroid)document.getElementById('app').classList.add('phone-detail');select(id); break;
     case "toggle": {
       const it = state.tasks.find((x) => x.id === id);
       if (!it) break;
@@ -1100,8 +1115,8 @@ async function onClick(ev) {
       snackbar(t("undone", { name: out.undone }), false);
       break;
     }
-    case "fold-sb": await setCollapse("sb", !state.viewPrefs?.sb_min); break;
-    case "fold-dt": await setCollapse("dt", true); break;
+    case "fold-sb": if(globalThis.QingdanAndroid)document.getElementById('app').classList.toggle('phone-nav');else await setCollapse("sb", !state.viewPrefs?.sb_min); break;
+    case "fold-dt": if(globalThis.QingdanAndroid)document.getElementById('app').classList.remove('phone-detail');else await setCollapse("dt", true); break;
     case "unfold-dt": await setCollapse("dt", false); break;
     case "ctx-toggle": {
       const it = state.tasks.find((x) => x.id === id) || await call("task.get", { item_id: id });
@@ -1248,9 +1263,14 @@ async function onClick(ev) {
       break;
     }
     case "sync-quick": await quickSync(); break;
+    case "auto-sync-save": {
+      if(!$('auto-sync-minutes').reportValidity())break;
+      await call('autosync.config_set',{enabled:$('auto-sync-enabled').checked,mode:$('auto-sync-mode').value,interval_minutes:Number($('auto-sync-minutes').value),times:$('auto-sync-times').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean)});
+      await loadSync();openSettings('sync');break;
+    }
     case "open-settings":
       if (tab === "sync") await loadSync();
-      else if (tab === "access") await loadAccess();
+      else if (tab === "access" || tab === "cli") await loadAccess();
       openSettings(tab || "appearance");
       break;
     case "settings-tab":
@@ -1260,7 +1280,7 @@ async function onClick(ev) {
       if (tab === "sync") await loadSync();
       else if (tab === "data") await loadData();
       else if (tab === "alert") await loadAlert();
-      else if (tab === "access") await loadAccess();
+      else if (tab === "access" || tab === "cli") await loadAccess();
       openSettings(tab);
       break;
     case "sync-login": await doLogin(); break;

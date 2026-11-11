@@ -48,6 +48,7 @@ export const state = {
   autostart: null,       // 开机自启状态，来自 app.autostart_get
   auth: null,            // 登录态（login / repo / clock 偏差），来自 auth.status
   syncStatus: null,      // 引擎状态（mode / pending / conflicts / push_blocked_key）
+  autoSync: null,
 
   selected: null,        // 当前详情任务 id
   detail: null,          // task.get 结果
@@ -181,6 +182,7 @@ export async function loadData() {
  * （数据页第一次上线就是被 app.autostart_get 的异常整块拖没的）。
  */
 export async function loadSync(opts = {}) {
+  const autoSync = await call('autosync.config_get');
   let auth;
   try {
     auth = await call("auth.status");
@@ -193,7 +195,7 @@ export async function loadSync(opts = {}) {
     // 仓库还没就绪、或换机后 DPAPI 解不开令牌时，界面仍要能显示"未同步"这个状态
     syncStatus = await call("sync.status").catch(() => null);
   }
-  if (!opts.guard || opts.guard()) patch({ auth, syncStatus });
+  if (!opts.guard || opts.guard()) patch({ auth, syncStatus, autoSync });
 }
 
 export async function loadDetail(id, opts = {}) {

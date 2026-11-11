@@ -16,8 +16,21 @@ export class ApiError extends Error {
 }
 
 let FEATURES = null;
+let nativeSequence=0;
+const nativeCalls=new Map();
+if(globalThis.QingdanAndroid)globalThis.qingdanNativeResult=(id,json)=>{
+  const pending=nativeCalls.get(id);if(!pending)return;
+  nativeCalls.delete(id);clearTimeout(pending.timer);
+  try{const body=JSON.parse(json);if(body.ok)pending.resolve(body.data);else pending.reject(new ApiError(body.error.code,body.error.message,body.error.detail,0));}catch(error){pending.reject(error);}
+};
+function nativeCall(name,params){return new Promise((resolve,reject)=>{
+  const id=String(++nativeSequence),timer=setTimeout(()=>{nativeCalls.delete(id);reject(new ApiError('TIMEOUT','Android operation timed out'));},120000);
+  nativeCalls.set(id,{resolve,reject,timer});
+  try{globalThis.QingdanAndroid.invoke(id,name,JSON.stringify(params));}catch(error){clearTimeout(timer);nativeCalls.delete(id);reject(error);}
+});}
 
 export async function loadFeatures() {
+  if(globalThis.QingdanAndroid){FEATURES=await nativeCall('meta.features',{});return FEATURES;}
   const res = await fetch('/api/v1/meta/features');
   const body = await res.json().catch(() => null);
   if (!res.ok || !body || body.ok !== true) {
@@ -55,6 +68,7 @@ export async function call(feature, params = {}) {
   if (!FEATURES) throw new ApiError('NOT_LOADED', 'api.js 尚未 loadFeatures()');
   const f = FEATURES[feature];
   if (!f) throw new ApiError('NO_SUCH_FEATURE', `后端没有这个功能：${feature}`, {}, 404);
+  if(globalThis.QingdanAndroid){const data=await nativeCall(feature,params);if(feature==='data.export'&&data.path)globalThis.QingdanAndroid.shareFile(data.path);return data;}
 
   const { method, path, rest, keys } = splitArgs(f, params);
   let url = path;

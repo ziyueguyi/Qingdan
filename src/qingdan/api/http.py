@@ -33,6 +33,7 @@ from qingdan import __version__
 from qingdan.core.registry import QdError, REGISTRY, call
 from qingdan.core import access
 from qingdan.api.rate_limit import RateLimiter
+_TOKEN_LIMITER = RateLimiter()
 
 # 请求体里允许直接透传的键；其余保留键忽略
 _RESERVED = {"_feature"}
@@ -163,6 +164,9 @@ def build_app(*, remote: bool = False) -> FastAPI:
                     raise QdError('API_TOKEN_REQUIRED','远程接口需要 Authorization: Bearer Token',401)
                 principal = access.authenticate(authorization[1],peer)
                 request.state.api_principal = principal
+                if not _TOKEN_LIMITER.allow(principal['id'],principal['max_qps'],window=1):
+                    raise QdError('TOKEN_RATE_LIMITED','Token 超过 QPS 限制',429)
+                access.reserve_call(principal['id'],peer)
                 response = await call_next(request)
             except QdError as e:
                 response = _err(e.code,e.message,e.http_status,e.detail)

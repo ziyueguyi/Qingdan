@@ -172,7 +172,7 @@ def test_remote_request_rate_and_body_limit(app_ctx):
 def test_access_settings_are_off_by_default_and_https_is_validated(app_ctx):
     assert call('access.config_get')['config']['enabled'] is False
     assert call('access.config_get')['config']['transport']=='https'
-    with pytest.raises(QdError): call('access.config_set',config={'enabled':True})
+    with pytest.raises(QdError): call('access.config_set',config={'enabled':True,'auto_tls':False})
     with pytest.raises(QdError): call('access.token_create',name='No local admin grant',features=['access.token_create'])
     with pytest.raises(QdError): call('access.token_create',name='No unknown scope',permissions=['admin'])
 
