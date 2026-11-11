@@ -39,14 +39,14 @@ export function renderAccessTab() {
     <div class="field api-enable-row"><label for="api-enabled">${esc(t('api_enable'))}</label><input id="api-enabled" class="api-switch" type="checkbox" ${c.enabled?'checked':''}></div>
     <div class="api-config-grid">
     <div class="field"><label>${esc(t('api_bind'))}</label><input class="ctl" id="api-host" value="${esc(c.host)}" required></div>
-    <div class="field"><label>${esc(t('api_port'))}</label><input class="ctl" id="api-port" type="number" min="1" max="65535" value="${c.port}" required></div>
+    <div class="field"><label id="api-primary-port-label">${esc(t(c.transport==='both'?'api_https_port':'api_port'))}</label><input class="ctl" id="api-port" type="number" min="1" max="65535" value="${c.port}" required></div>
     <div class="field"><label>${esc(t('api_transport'))}</label><select class="ctl" id="api-transport"><option value="http" ${c.transport==='http'?'selected':''}>${esc(t('api_http_plain'))}</option><option value="https" ${c.transport==='https'?'selected':''}>HTTPS</option><option value="both" ${c.transport==='both'?'selected':''}>HTTP + HTTPS</option></select></div>
     <div class="field" id="api-http-port-row" ${c.transport!=='both'?'hidden':''}><label>${esc(t('api_http_port'))}</label><input class="ctl" id="api-http-port" type="number" min="1" max="65535" value="${c.http_port}"></div>
     <div id="api-tls-fields" ${c.transport==='http'?'hidden':''}><div class="field"><label>${esc(t('api_certificate_mode'))}</label><select class="ctl" id="api-auto-tls"><option value="true" ${c.auto_tls?'selected':''}>${esc(t('api_auto_cert'))}</option><option value="false" ${!c.auto_tls?'selected':''}>${esc(t('api_import_cert'))}</option></select></div><p class="desc">${esc(t('api_auto_cert_note'))}</p><div id="api-manual-tls" ${c.auto_tls?'hidden':''}><div class="field"><label>${esc(t('api_cert'))}</label><input class="ctl" id="api-cert" value="${esc(c.tls_cert)}" placeholder="server-cert.pem"></div><div class="field"><label>${esc(t('api_key'))}</label><input class="ctl" id="api-key" value="${esc(c.tls_key)}" placeholder="server-key.pem"></div></div></div></div>
     <p class="desc" id="api-http-note" ${c.transport==='https'?'hidden':''}>${esc(t('api_http_note'))}</p>
     <details><summary>${esc(t('api_limits'))}</summary><div class="field"><label>${esc(t('api_rate'))}</label><input class="ctl" id="api-rate" type="number" min="10" max="6000" value="${c.requests_per_minute}"></div><div class="field"><label>${esc(t('api_body_limit'))}</label><input class="ctl" id="api-body" type="number" min="1" max="32768" value="${c.max_body_kb}"></div></details>
     <div class="btnrow"><button class="btn pri" data-act="access-save">${esc(t('save'))}</button></div>
-    <details class="api-connection-help"><summary>${esc(t('api_call_example'))}</summary><p class="desc">${esc(t('api_remote_note'))}</p><code class="api-code">${esc(url)}/api/v1/tasks</code><code class="api-code">Authorization: Bearer TOKEN</code></details>
+    <details class="api-connection-help"><summary>${esc(t('api_call_example'))}</summary><p class="desc">${esc(t('api_remote_note'))}</p><code class="api-code">${esc(url)}/api/v1/tasks</code>${c.transport==='both'?`<code class="api-code">http://${esc(host)}:${c.http_port}/api/v1/tasks</code>`:''}<code class="api-code">Authorization: Bearer TOKEN</code></details>
   </section>
   <section class="api-section" data-access-section="tokens"><h3>${esc(t('api_tokens_title'))}<button class="btn" data-act="access-token-new">＋ ${esc(t('api_create_token'))}</button></h3>
     ${A.raw?`<div class="api-secret"><b>${esc(t('api_once'))}</b><input class="ctl" id="api-new-token" readonly value="${esc(A.raw)}"><div class="btnrow"><button class="btn" data-act="access-copy">${esc(t('api_copy'))}</button><button class="btn" data-act="access-token-hide">${esc(t('api_hide'))}</button></div></div>`:''}
@@ -123,7 +123,7 @@ async function saveEditor(button) {
 export function handleAccessChange(el) {
   if(el.dataset.accessPermission && A.editor){const p=el.dataset.accessPermission;el.checked?A.editor.permissions.add(p):A.editor.permissions.delete(p);return true;}
   if(el.dataset.accessFeature && A.editor){const f=el.dataset.accessFeature;el.checked?A.editor.features.add(f):A.editor.features.delete(f);return true;}
-  if(el.id==='api-transport'){$('api-tls-fields').hidden=el.value==='http';$('api-http-note').hidden=el.value==='https';$('api-http-port-row').hidden=el.value!=='both';return true;}
+  if(el.id==='api-transport'){$('api-tls-fields').hidden=el.value==='http';$('api-http-note').hidden=el.value==='https';$('api-http-port-row').hidden=el.value!=='both';$('api-primary-port-label').textContent=t(el.value==='both'?'api_https_port':'api_port');return true;}
   if(el.id==='api-auto-tls'){$('api-manual-tls').hidden=el.value==='true';return true;}
   return false;
 }

@@ -8,6 +8,7 @@
 const DICT = {
   zh: {
     tab_access: "API", tab_cli: "CLI",
+    api_https_port: "HTTPS 端口",
     api_http_plain: "HTTP（无需证书）", api_http_port: "HTTP 端口", api_certificate_mode: "证书方式",
     api_auto_cert: "自动生成自签名证书", api_import_cert: "导入已有证书", api_auto_cert_note: "自动证书无需购买或上传，首次启用时在数据目录生成；客户端需信任该证书。HTTP 无需证书，Token 仍须提供。",
     api_token_col: "Token", api_call_stats: "调用统计", api_qps: "频率（QPS）", api_call_limit: "调用限制", api_created: "创建时间", api_recent: "最近使用", api_status_col: "状态", api_note: "备注", api_actions: "操作", api_unlimited: "无限制", api_quota_reached: "次数已用尽",
@@ -259,6 +260,7 @@ const DICT = {
   },
   en: {
     tab_access: "API", tab_cli: "CLI",
+    api_https_port: "HTTPS port",
     api_http_plain: "HTTP (no certificate)", api_http_port: "HTTP port", api_certificate_mode: "Certificate mode",
     api_auto_cert: "Generate self-signed certificate", api_import_cert: "Import certificate", api_auto_cert_note: "Automatic certificates are generated in the data folder on first use; clients must trust them. HTTP needs no certificate. Both modes still require a token.",
     api_token_col: "Token", api_call_stats: "Calls", api_qps: "Rate (QPS)", api_call_limit: "Call quota", api_created: "Created", api_recent: "Last used", api_status_col: "Status", api_note: "Note", api_actions: "Actions", api_unlimited: "Unlimited", api_quota_reached: "Quota exhausted",
