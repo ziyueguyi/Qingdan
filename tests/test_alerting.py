@@ -50,6 +50,9 @@ def fake_channels(app_ctx):
     fakes = {n: Fake(n) for n in ("toast", "dingtalk", "email")}
     for f in fakes.values():
         register_channel(f)
+    # Sending tests must not depend on the runner's timezone or time of day.
+    # Quiet-hours tests explicitly enable their own schedule below.
+    acfg.update_config({"dnd": {"enabled": False}})
     yield fakes
     CHANNELS.clear()
     CHANNELS.update(originals)
@@ -621,3 +624,4 @@ def test_alert_rebuild_endpoint(app_ctx, fake_channels):
     call("task.create", title="A", due_at=at(5))
     out = call("alert.rebuild")
     assert out["jobs"] == 1 and out["pending"] == 1
+

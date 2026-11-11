@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: utf-8
+
 concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: true
@@ -82,3 +86,4 @@ jobs:
           name: test-results
           path: buildtmp/test-results.xml
           if-no-files-found: ignore
+

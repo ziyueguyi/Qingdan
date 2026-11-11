@@ -91,8 +91,8 @@ def main() -> None:
     write_ico(ico, [draw(w) for w, _ in ICO_SIZES])
 
     entries = ico_entries(ico)
-    print(f"图标已生成：{png} ({png.stat().st_size} B) / {ico} ({ico.stat().st_size} B)")
-    print(f"ico 内嵌尺寸：{entries}")
+    print(f"Generated icons: {png} ({png.stat().st_size} B) / {ico} ({ico.stat().st_size} B)")
+    print(f"ICO sizes: {entries}")
     assert len(entries) == len(ICO_SIZES), f"ico 只写入了 {len(entries)} 个尺寸，应为 {len(ICO_SIZES)}"
     assert sorted(entries) == sorted(ICO_SIZES), f"ico 尺寸与预期不符：{entries}"
 
@@ -117,3 +117,4 @@ def ico_entries(path: Path) -> list[tuple[int, int]]:
 
 if __name__ == "__main__":
     main()
+
