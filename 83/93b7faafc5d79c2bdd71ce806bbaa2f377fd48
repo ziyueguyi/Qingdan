@@ -1,0 +1,24 @@
+.github/workflows/build.yml
+  s_7909b70258899a::t_1d1df6db9e4d95 96-98
+  s_7909b70258899a::t_9694009028cc8d 27-28,63,66,93-95,99-133
+README.md
+  s_7909b70258899a::t_9694009028cc8d 43,45-47
+docs/GitHub-自动构建.md
+  s_7909b70258899a::t_1d1df6db9e4d95 13,15-19,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8393b7faafc5d79c2bdd71ce806bbaa2f377fd48",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
