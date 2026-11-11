@@ -10,12 +10,16 @@
 
 ## 下载
 
-打开 https://github.com/ziyueguyi/Qingdan/actions ，进入成功的运行记录，下载底部 Artifacts 中的 `Qingdan-windows-x64`。GitHub 通常要求登录才能下载 Artifact。产物保留 30 天。
+正式下载入口为仓库的 Releases 页面：https://github.com/ziyueguyi/Qingdan/releases 。打开最新版本，在 Assets 中选择名称含 windows-x64 的 ZIP；Source code 是源码，不是运行包。
 
-下载内容包括带版本号和提交摘要的 `Qingdan-版本-windows-x64-提交.zip`、SHA-256 校验文件及体积报告。先解开 Artifact 的外层包，再解开软件 ZIP，保留整个 Qingdan 文件夹并运行其中的 `Qingdan.exe`。脚本入口为同目录的 `QingdanCLI.exe`；不要只拿走单个 EXE。
+下载内容包括带版本号和提交摘要的 `Qingdan-版本-windows-x64-提交.zip`、SHA-256 校验文件及体积报告。解压 ZIP，保留整个 Qingdan 文件夹并运行其中的 `Qingdan.exe`。脚本入口为同目录的 `QingdanCLI.exe`；不要只拿走单个 EXE。
+
+main 或版本标签构建成功后自动发布应用版本对应的 Release，手动构建 main 也支持发布。首次发布时先建立草稿、上传完整资产，再公开显示；发布阶段失败可重跑。已公开的同版本不会被覆盖，发新版应同时增加 pyproject.toml 和 src/qingdan/__init__.py 中的版本号；若推送标签，其名称必须与应用版本 vX.Y.Z 一致。
+
+Actions 的 Artifacts 仍保留 30 天，作为开发验收备份；正式用户从 Releases 下载，不依赖 Artifact 的保留期限。
 
 仓库不保存数据库、凭据或构建产物；构建包不会包含本地使用数据，也不会指向开发电脑的数据目录。已有用户更新时先退出旧程序，保留现有数据目录。这个流程生成便携目录包，不是安装程序，也不增加代码签名。
 
-工作流位于 `.github/workflows/build.yml`，默认仅有读取源码权限。没有使用账户密码或个人 Token；未来提交仍可使用正常 Git 客户端。
+工作流位于 `.github/workflows/build.yml`。测试/构建阶段只读源码；独立发布阶段使用 contents: write 和 GitHub 自动提供的临时令牌创建版本及上传资产，不需要账户密码或个人 Token。Pull Request 不执行发布阶段。
 
 相关 GitHub 官方说明：[Actions 快速入门](https://docs.github.com/en/actions/get-started/quickstart)、[构建产物上传与下载](https://docs.github.com/en/actions/tutorials/store-and-share-data)。
