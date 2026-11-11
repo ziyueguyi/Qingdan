@@ -1,0 +1,21 @@
+src/qingdan/web/app.css
+  s_7909b70258899a::t_ddf29dbd66ded0 391-393
+.github/workflows/build.yml
+  s_7909b70258899a::t_ddf29dbd66ded0 111,115-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a41fc228584ebb1400378da70cfa1874f8175ef4",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
