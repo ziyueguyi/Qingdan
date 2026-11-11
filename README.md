@@ -40,7 +40,16 @@
 
 ## 2. 快速开始
 
-**用发行包**：双击 `dist\release-20261111-final\Qingdan\Qingdan.exe`。
+**EXE 下载位置（GitHub 仓库页面内）**：
+
+1. 点击仓库顶部的 **Actions**，选择 **build-windows-exe**。
+2. 打开最新一条显示绿色勾号、构建成功的运行记录。
+3. 在页面底部 **Artifacts** 区域，下载 **Qingdan-windows-x64**，不要选 `test-results`。
+4. 解压下载包，再解压其中带版本号的 ZIP，保留完整的 `Qingdan` 文件夹。
+
+下载 Artifact 需要登录 GitHub。构建包保留 30 天；如果已过期，可在 Actions 中选择 **Run workflow** 重新构建。
+
+**用发行包**：双击解压后 `Qingdan` 文件夹内的 `Qingdan.exe`。
 命令行用同目录 `QingdanCLI.exe`。两个程序及其依赖文件放在同一目录；旧版程序与数据保留在原处，
 可用 `Qingdan.exe app <原数据目录>` 指定已有数据。
 
