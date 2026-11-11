@@ -108,13 +108,20 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-37 build-tools;37.0.0'
+      - name: Install latest stable Android SDK
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --version
+          set +o pipefail
+          yes | "$sdkmanager" --licenses > /dev/null
+          license_status=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$license_status" -eq 0
+          "$sdkmanager" 'platform-tools' 'platforms;android-37' 'build-tools;37.0.0'
       - name: Prepare shared Android runtime
         run: |
           python -m pip install 'dulwich==1.2.21'

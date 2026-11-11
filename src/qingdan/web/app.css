@@ -388,8 +388,9 @@ textarea.note{width:100%;background:var(--bg-2);border:1px solid var(--line);
 html[data-platform=android] body{overscroll-behavior:none}
 html[data-platform=android] .app{display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-template-rows:52px minmax(0,1fr) 52px;height:100dvh}
 html[data-platform=android] .topbar{grid-column:1;grid-row:1;padding-left:48px;gap:7px}
-html[data-platform=android] .topbar .title{max-width:80px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-html[data-platform=android] .topbar .search{min-width:0;flex:1;width:auto}
+html[data-platform=android] .topbar h1{max-width:80px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html[data-platform=android] .topbar .searchbox{min-width:0;flex:1;width:auto;padding:5px 7px;gap:4px}
+html[data-platform=android] .topbar>.spacer{display:none}
 html[data-platform=android] .topbar .pill{display:none}
 html[data-platform=android] .main{grid-column:1;grid-row:2;min-width:0}
 html[data-platform=android] .iconbar{grid-column:1;grid-row:3;flex-direction:row;justify-content:space-around;padding:4px 10px;gap:6px;border-right:0;border-top:1px solid var(--line)}
