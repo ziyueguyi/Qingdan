@@ -2,11 +2,11 @@ plugins { id 'com.android.application'; id 'com.chaquo.python' }
 
 android {
     namespace 'com.ziyueguyi.qingdan'
-    compileSdk 35
+    compileSdk 37
     defaultConfig {
         applicationId 'com.ziyueguyi.qingdan'
         minSdk 24
-        targetSdk 35
+        targetSdk 37
         versionCode 30000
         versionName '0.3.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
