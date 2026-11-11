@@ -1,0 +1,37 @@
+pyproject.toml
+  s_7909b70258899a::t_d3dbba76468a5c 7
+  s_7909b70258899a::t_db2a75695793f8 17-19
+README.md
+  s_7909b70258899a::t_ef932e009f3861 4,19,31
+  s_7909b70258899a::t_7804fdb95a10bc 274
+.gitignore
+  s_7909b70258899a::t_7804fdb95a10bc 8
+.github/workflows/build.yml
+  s_7909b70258899a::t_db2a75695793f8 10-18,23-26,33,45,53-66,70-84
+docs/GitHub-自动构建.md
+  s_7909b70258899a::t_558d2343e5160d 1-21
+src/qingdan/__init__.py
+  s_7909b70258899a::t_d3dbba76468a5c 3
+src/qingdan/web/store.js
+  s_7909b70258899a::t_d3dbba76468a5c 152,155-158
+docs/0.2.2-左侧菜单验收.md
+  s_7909b70258899a::t_ef932e009f3861 1-17
+src/qingdan/core/merge.py
+  s_7909b70258899a::t_d3dbba76468a5c 138,140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "51779fe4a63369bac8e58a2cd8935034c20de3a4",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
