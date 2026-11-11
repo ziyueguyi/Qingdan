@@ -1,0 +1,38 @@
+# ---- 运行时 / 构建产物（不入库）----
+.venv/
+venv/
+build/
+buildtmp/
+dist/
+__pycache__/
+*.egg-info/
+*.pyc
+*.pyo
+
+# ---- 测试与评审残留 ----
+.pytest_cache/
+.pytest_tmp_*/
+.review_*/
+.m11/
+.m2demo/
+.final.txt
+
+# ---- 日志 / 快捷方式 ----
+*.log
+.*.log
+*.lnk
+
+# ---- 数据与凭据：绝不入库 ----
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+http.json
+restore_pending.json
+.secrets/
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini

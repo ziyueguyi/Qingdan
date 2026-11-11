@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="light" data-accent="blue" data-size="m">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
+<title>清单</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="iconbar" id="iconbar"></nav>
+  <header class="topbar" id="topbar"></header>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main">
+    <div class="toolbar" id="toolbar"></div>
+    <div class="scroll" id="scroll"><div class="loading">…</div></div>
+    <div class="statusbar" id="statusbar"></div>
+  </main>
+  <aside class="detail" id="detail"></aside>
+  <button class="dt-restore" id="dt-restore" data-act="unfold-dt">详情 »</button>
+</div>
+
+<div class="mask" id="mask" hidden><div class="modal" id="modal"></div></div>
+<div class="ctxmenu" id="ctxmenu" hidden></div>
+<div class="snackbar" id="snackbar" hidden></div>
+<div class="toast-err" id="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

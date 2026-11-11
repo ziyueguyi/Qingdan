@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>原型 · 可折叠侧栏与详情面板</title>
+<!--
+  交互原型（2026-11-10）：左栏折叠、右栏折叠成还原按钮、状态栏新样式。
+  单文件、零外部依赖、离线可开。演示数据取自真实使用场景。
+  只看行为，不看美观度；真代码会接进 app.js/app.css 并走 i18n 与 view_pref 持久化。
+  快捷键：[ 折/展左栏，] 折/展右栏。
+  折叠侧栏（按你的意见更新）：折叠态保留「图标 + 文字标签」96px 窄列，标签单行截断、
+  计数收成小角标；只隐藏分区标题与文字提示。
+  最左 60px 图标栏（布局切换 + 同步/提醒/设置）已补进原型，且**不参与折叠**——
+  侧栏收起后它是唯一常驻导航（2026-11-10 你两次点名要保留的那一列）。
+  状态栏（与真代码同构）：数据库段已去除，改为图标 + 标签 + 数值；窗口 < 900px 时
+  标签隐藏只留图标和数值；右端模式是绿/灰点（点它切换演示）。
+-->
+<style>
+  :root{
+    --bg:#f7f8fa; --bg-2:#ffffff; --line:#e3e6eb; --text:#1f2329; --text-2:#5a698;
+    --text-2:#5b6472; --text-3:#98a1ad; --accent:#2f6fed; --hover:#eef2fb;
+    --danger:#d64545; --warn:#c77700; --radius:8px; --fs:13px; --fs-s:12px;
+    --sbw:236px; --sbw-min:112px; --dtw:300px;
+  }
+  [data-theme="dark"]{
+    --bg:#171a1f; --bg-2:#1e2228; --line:#2c323b; --text:#e6e9ee; --text-2:#aeb6c2;
+    --text-3:#79818d; --accent:#5b8cff; --hover:#242b36; --danger:#ff7b7b; --warn:#e0a34e;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font:var(--fs)/1.55 system-ui,"Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--text)}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+  .app{display:grid;height:100%;
+       grid-template-columns:60px var(--sbw) 1fr var(--dtw);
+       grid-template-rows:44px 1fr 28px;
+       grid-template-areas:"top top top top" "rail sb main dt" "st st st st";
+       transition:grid-template-columns .18s ease}
+  .app.sb-min{grid-template-columns:60px var(--sbw-min) 1fr var(--dtw)}
+  .app.dt-min{grid-template-columns:60px var(--sbw) 1fr 0px}
+  .app.sb-min.dt-min{grid-template-columns:60px var(--sbw-min) 1fr 0px}
+
+  /* ---------------------------------------------------------------- 顶栏 */
+  .top{grid-area:top;display:flex;align-items:center;gap:10px;padding:0 12px;
+       background:var(--bg-2);border-bottom:1px solid var(--line)}
+  .logo{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;
+        display:grid;place-items:center;font-size:13px}
+  .top h1{font-size:15px;margin:0 6px 0 0}
+  .search{flex:0 1 320px;height:28px;border:1px solid var(--line);border-radius:6px;
+          background:var(--bg);color:var(--text-3);padding:0 10px;display:flex;align-items:center}
+  .spacer{flex:1}
+  .pill{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:var(--fs-s);
+        color:var(--text-2);background:var(--bg)}
+  .pill b{color:var(--warn)}
+
+  /* 最左图标栏（真程序里一直有，原型此前漏了）：布局切换 + 底部同步/提醒/设置。
+     它**不参与折叠**——侧栏收起后它是唯一常驻导航，2026-11-10 用户两次点名要保留。 */
+  .rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:6px;
+        padding:8px 0;background:var(--bg-2);border-right:1px solid var(--line)}
+  .rail .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;
+              display:grid;place-items:center;font-size:14px;margin-bottom:6px}
+  .ric{width:36px;height:34px;border-radius:8px;color:var(--text-3);font-size:15px;
+       display:grid;place-items:center}
+  .ric:hover{background:var(--hover);color:var(--text)}
+  .ric.on{background:var(--hover);color:var(--accent)}
+  .ric.warn{color:var(--warn)}
+  .rail .spacer{flex:1}
+
+  /* ---------------------------------------------------------------- 左栏 */
+  .sb{grid-area:sb;background:var(--bg-2);border-right:1px solid var(--line);
+      overflow:hidden auto;padding:6px 8px 10px;position:relative}
+  .sb-head{display:flex;align-items:center;justify-content:flex-end;padding:2px 2px 6px}
+  .fold{width:22px;height:22px;border-radius:5px;color:var(--text-3);display:grid;place-items:center}
+  .fold:hover{background:var(--hover);color:var(--accent)}
+  .sec{font-size:var(--fs-s);color:var(--text-3);padding:10px 6px 4px;white-space:nowrap}
+  .nav{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;border-radius:6px;
+       color:var(--text);white-space:nowrap;text-align:left}
+  .nav:hover{background:var(--hover)}
+  .nav.on{background:var(--hover);color:var(--accent)}
+  .nav .ic{width:18px;text-align:center;flex:none}
+  .nav .lbl{flex:1;overflow:hidden;text-overflow:ellipsis}
+  .nav .ct{font-size:11px;color:var(--text-3)}
+  .nav.on .ct{color:var(--accent)}
+  .hintline{font-size:var(--fs-s);color:var(--text-3);padding:2px 8px;white-space:nowrap}
+
+  /* 折叠态：保留「图标 + 文字标签」窄列（2026-11-10 用户要求：标签列不能没）。
+     只隐藏分区标题与文字提示，标签单行截断、计数收成小角标。 */
+  .app.sb-min .sb{padding:6px 6px 10px}
+  .app.sb-min .sb-head{justify-content:center}
+  .app.sb-min .sec,.app.sb-min .hintline{display:none}
+  .app.sb-min .nav{gap:6px;padding:6px 6px}
+  .app.sb-min .nav .lbl{font-size:var(--fs-s)}
+  .app.sb-min .nav .ct{font-size:10px;background:var(--line);border-radius:999px;padding:0 5px;color:var(--text-2)}
+  .app.sb-min .nav.on .ct{background:var(--accent);color:#fff}
+
+  /* ---------------------------------------------------------------- 主区 */
+  .main{grid-area:main;overflow:auto;padding:14px 18px}
+  .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{padding:4px 12px;color:var(--text-2)}
+  .seg button.on{background:var(--hover);color:var(--accent)}
+  .sel{border:1px solid var(--line);border-radius:6px;background:var(--bg-2);color:var(--text-2);
+       padding:4px 8px}
+  .btn{border:1px solid var(--line);border-radius:6px;padding:4px 10px;color:var(--text-2);
+       background:var(--bg-2)}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .cd{display:flex;gap:14px;align-items:center;border:1px solid var(--line);border-radius:var(--radius);
+      background:var(--bg-2);padding:10px 14px;margin-bottom:14px;max-width:420px}
+  .cd .k{color:var(--text-3);font-size:var(--fs-s)}
+  .cd .v{font-size:19px;font-weight:600;color:var(--accent)}
+  .qa{color:var(--text-3);margin:6px 0 2px}
+  .chips{font-size:var(--fs-s);color:var(--text-3);margin-bottom:14px}
+  .chips b{color:var(--accent);font-weight:400;margin-right:8px}
+  .grp{font-size:var(--fs-s);color:var(--danger);font-weight:600;margin:10px 0 6px}
+  .task{display:flex;gap:9px;align-items:flex-start;border-left:3px solid var(--danger);
+        padding:7px 10px;border-radius:0 6px 6px 0;background:var(--bg-2);margin-bottom:8px;
+        cursor:pointer;max-width:560px}
+  .task:hover{background:var(--hover)}
+  .task.sel-on{outline:1px solid var(--accent)}
+  .task .box{width:15px;height:15px;border:1.5px solid var(--text-3);border-radius:4px;margin-top:3px;flex:none}
+  .task .flag{color:var(--danger)}
+  .task .meta{font-size:var(--fs-s);color:var(--danger);margin-top:2px}
+  .task .tag{background:var(--line);color:var(--text-2);border-radius:4px;padding:0 6px;
+             font-size:11px;margin-left:8px}
+
+  /* ---------------------------------------------------------------- 右栏 */
+  .dt{grid-area:dt;border-left:1px solid var(--line);background:var(--bg-2);
+      overflow:hidden auto;padding:14px;position:relative}
+  .app.dt-min .dt{border-left:0;padding:0}
+  .dt-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .dt-head b{font-size:var(--fs-s);color:var(--text-3)}
+  .row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:var(--fs-s)}
+  .row .k{color:var(--text-3);width:52px;flex:none}
+  .row .v{color:var(--text)}
+  .empty{color:var(--text-3);text-align:center;margin-top:60px}
+  .note{border-left:3px solid var(--accent);background:var(--hover);padding:8px 10px;
+        font-size:var(--fs-s);color:var(--text-2);border-radius:0 6px 6px 0;margin-top:14px}
+
+  /* 右栏折叠后：右缘竖排还原按钮 */
+  .dt-restore{position:fixed;right:0;top:50%;transform:translateY(-50%);
+              writing-mode:vertical-rl;padding:14px 5px;font-size:var(--fs-s);
+              color:var(--text-2);background:var(--bg-2);border:1px solid var(--line);
+              border-right:0;border-radius:8px 0 0 8px;display:none;z-index:5}
+  .dt-restore:hover{color:var(--accent);border-color:var(--accent)}
+  .app.dt-min .dt-restore{display:block}
+  .app.dt-min .dt > *{display:none}
+
+  /* ---------------------------------------------------------------- 状态栏 */
+  .st{grid-area:st;display:flex;gap:14px;align-items:center;padding:0 12px;
+      font-size:11px;color:var(--text-3);background:var(--bg-2);border-top:1px solid var(--line)}
+  .st b{color:var(--text-2);font-weight:400}
+  /* 状态栏新样式（与真代码同构）：图标 + 标签 + 数值；数据库段已去除。
+     窗口 < 900px 时标签隐藏，只留图标和数值；模式收成绿/灰点。 */
+  .st .st-i{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .st .st-i i{font-style:normal;font-size:11px;line-height:1;opacity:.9}
+  .st .st-i b{color:var(--text-2);font-weight:500}
+  .st .st-i.bad b{color:var(--danger)}
+  .st .st-i.warn b{color:var(--warn)}
+  .st .mode{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer}
+  .st .dot{width:8px;height:8px;border-radius:50%;background:var(--text-3);flex:none}
+  .st .mode.ok .dot{background:#2e9e5b}
+  .st .spacer{flex:1}
+  @media (max-width: 900px){ .st .st-l{display:none} .st{gap:10px} }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="rail">
+    <span class="logo">清</span>
+    <button class="ric on" title="列表">▤</button>
+    <button class="ric" title="看板">▦</button>
+    <button class="ric" title="日历">◔</button>
+    <span class="spacer"></span>
+    <button class="ric" title="同步">⟳</button>
+    <button class="ric warn" title="提醒">🔔</button>
+    <button class="ric" title="设置">⚙</button>
+  </nav>
+
+  <header class="top">
+    <h1>今天</h1>
+    <span class="search">🔍 搜索任务、分组、标签</span>
+    <span class="spacer"></span>
+    <span class="pill">● 待推送 <b>2</b></span>
+    <button class="fold" id="theme" title="切换主题（证明走 token，不写死）">🌗</button>
+  </header>
+
+  <aside class="sb" id="sb">
+    <div class="sb-head">
+      <button class="fold" id="sb-toggle" title="折叠侧栏（快捷键 [）">«</button>
+    </div>
+    <div class="sec">智能视图</div>
+    <button class="nav on"><span class="ic">📅</span><span class="lbl">今天</span><span class="ct">2</span></button>
+    <button class="nav"><span class="ic">🗓</span><span class="lbl">近一周</span><span class="ct">3</span></button>
+    <button class="nav"><span class="ic">📥</span><span class="lbl">收集箱</span><span class="ct">1</span></button>
+    <button class="nav"><span class="ic">☑</span><span class="lbl">已完成</span><span class="ct">4</span></button>
+    <button class="nav"><span class="ic">🗑</span><span class="lbl">垃圾桶</span><span class="ct"></span></button>
+    <button class="nav"><span class="ic">▦</span><span class="lbl">全部</span><span class="ct">8</span></button>
+    <div class="sec">分组</div>
+    <button class="nav"><span class="ic">▤</span><span class="lbl">工作</span><span class="ct">3</span></button>
+    <button class="nav"><span class="ic">▤</span><span class="lbl">生活</span><span class="ct">2</span></button>
+    <div class="hintline">＋ 新分组</div>
+    <div class="sec">标签</div>
+    <button class="nav"><span class="ic">🏷</span><span class="lbl">重要</span><span class="ct">2</span></button>
+  </aside>
+
+  <main class="main">
+    <div class="bar">
+      <span class="seg"><button class="on">列表</button><button>看板</button><button>日历</button></span>
+      <select class="sel"><option>按日期</option></select>
+      <select class="sel"><option>智能排序</option></select>
+      <span class="spacer"></span>
+      <button class="btn">＋ 倒数日</button>
+    </div>
+
+    <div class="cd"><span class="k">倒数日</span><span><b>1231</b><br><span class="v">已过 5 天</span></span></div>
+
+    <div class="qa">＋ 添加任务，按 Enter 保存</div>
+    <div class="chips">自然语言：<b>明天下午3点</b><b>#work</b><b>@tag</b><b>!P1</b></div>
+
+    <div class="grp">已逾期</div>
+    <div class="task sel-on" id="t1">
+      <span class="box"></span>
+      <span><span class="flag">⚑</span> 从冻结版 exe 建的任务
+        <div class="meta">逾期 4d 20:00<span class="tag">重要</span></div></span>
+    </div>
+    <div class="task" id="t2">
+      <span class="box"></span>
+      <span>交材料<div class="meta" style="color:var(--warn)">今天 15:00<span class="tag">工作</span></div></span>
+    </div>
+  </main>
+
+  <aside class="dt" id="dt">
+    <div class="dt-head"><b>详情</b>
+      <button class="fold" id="dt-toggle" title="收起详情（快捷键 ]）">»</button></div>
+    <div class="row"><span class="k">标题</span><span class="v">从冻结版 exe 建的任务</span></div>
+    <div class="row"><span class="k">优先级</span><span class="v">P2 高</span></div>
+    <div class="row"><span class="k">到期</span><span class="v">2026-11-06 20:00（逾期 4 天）</span></div>
+    <div class="row"><span class="k">重复</span><span class="v">每天 · 下一次 2026-11-11 20:00</span></div>
+    <div class="row"><span class="k">标签</span><span class="v">重要</span></div>
+    <div class="row"><span class="k">分组</span><span class="v">工作</span></div>
+    <div class="note">数据只存在本机 SQLite。同步与冲突裁决、告警、备份恢复都可用，
+      分别在设置页的 同步 / 提醒 / 数据 三个页签里。</div>
+  </aside>
+
+  <button class="dt-restore" id="dt-restore" title="展开详情（快捷键 ]）">详情 »</button>
+
+  <footer class="st">
+    <span class="st-i" title="任务"><i>▤</i><span class="st-l">任务</span><b>8</b></span>
+    <span class="st-i bad" title="逾期"><i>⚠</i><span class="st-l">逾期</span><b>1</b></span>
+    <span class="st-i" title="今天"><i>📅</i><span class="st-l">今天</span><b>2</b></span>
+    <span class="st-i" title="今日完成"><i>☑</i><span class="st-l">今日完成</span><b>0</b></span>
+    <span class="st-i warn" title="待推送"><i>⇪</i><span class="st-l">待推送</span><b>2</b></span>
+    <span class="spacer"></span>
+    <span class="mode off" id="mode" title="离线模式 · 数据仅本机（点我切换绿/灰点演示）">
+      <i class="dot"></i><span class="st-l">离线模式 · 数据仅本机</span></span>
+  </footer>
+</div>
+
+<script>
+  const app = document.getElementById("app");
+  const sbT = document.getElementById("sb-toggle");
+  const dtT = document.getElementById("dt-toggle");
+  const rs  = document.getElementById("dt-restore");
+
+  function setSB(min){
+    app.classList.toggle("sb-min", min);
+    sbT.textContent = min ? "»" : "«";
+    sbT.title = min ? "展开侧栏（快捷键 [）" : "折叠侧栏（快捷键 [）";
+  }
+  function setDT(min){
+    app.classList.toggle("dt-min", min);
+  }
+  sbT.onclick = () => setSB(!app.classList.contains("sb-min"));
+  dtT.onclick = () => setDT(true);
+  rs.onclick  = () => setDT(false);
+
+  document.getElementById("theme").onclick = () => {
+    const dark = document.documentElement.dataset.theme === "dark";
+    document.documentElement.dataset.theme = dark ? "" : "dark";
+  };
+
+  // 点任务切换详情选中态（原型里只演示"右栏收起来后仍能选中、还原后还在"）
+  for (const id of ["t1", "t2"]) {
+    document.getElementById(id).onclick = () => {
+      document.querySelectorAll(".task").forEach(x => x.classList.remove("sel-on"));
+      document.getElementById(id).classList.add("sel-on");
+    };
+  }
+
+  addEventListener("keydown", (e) => {
+    if (e.key === "[") setSB(!app.classList.contains("sb-min"));
+    if (e.key === "]") setDT(!app.classList.contains("dt-min"));
+  });
+
+  // 绿/灰点演示：点状态栏右端的点切换"已登录·同步可用 / 离线·数据仅本机"
+  const mode = document.getElementById("mode");
+  mode.onclick = () => {
+    const ok = mode.classList.toggle("ok");
+    mode.classList.toggle("off", !ok);
+    const txt = ok ? "已登录 · 同步可用" : "离线模式 · 数据仅本机";
+    mode.title = txt + "（点我切换绿/灰点演示）";
+    mode.querySelector(".st-l").textContent = txt;
+  };
+</script>
+</body>
+</html>
