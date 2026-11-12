@@ -1,0 +1,21 @@
+docs/0.3.0-发布验收.md
+  s_7909b70258899a::t_e4d41d2d6e389a 1-17
+docs/0.3.0-开发进度.md
+  s_7909b70258899a::t_e4d41d2d6e389a 13,17-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb9b853321aaa11eb660b4a86420e26539a6b608",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
