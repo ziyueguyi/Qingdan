@@ -7,6 +7,14 @@
 
 const DICT = {
   zh: {
+    sync_phase_idle: '暂无同步任务', sync_phase_preparing: '正在检查同步配置', sync_phase_fetching: '正在拉取远端数据',
+    sync_result_counts: '拉取 {pulled} · 推送 {pushed} · 冲突 {conflicts}',
+    sync_phase_merging: '正在合并数据', sync_phase_pushing: '正在推送本地改动', sync_phase_completed: '同步完成',
+    sync_phase_failed: '同步未完成', sync_phase_interrupted: '上次同步被中断',
+    sync_error_auth: '请重新登录并检查令牌权限。', sync_error_private: '请将远端仓库设置为私有后重试。',
+    sync_error_clock: '请校正设备时间后重试。', sync_error_busy: '已有同步操作正在执行，请等待完成。',
+    sync_error_interrupted: '上次执行被中断，本地改动仍保留，可再次同步。', sync_error_retry: '请检查网络与同步配置后重试。',
+    auto_sync_paused: '定时同步已暂停；处理问题后重新登录或保存计划继续。',
     tab_access: "API", tab_cli: "CLI",
     api_https_port: "HTTPS 端口",
     api_http_plain: "HTTP（无需证书）", api_http_port: "HTTP 端口", api_certificate_mode: "证书方式",
@@ -259,6 +267,14 @@ const DICT = {
     data_dir: "数据目录",
   },
   en: {
+    sync_phase_idle: 'No sync running', sync_phase_preparing: 'Checking sync configuration', sync_phase_fetching: 'Fetching remote data',
+    sync_result_counts: 'Pulled {pulled} · pushed {pushed} · conflicts {conflicts}',
+    sync_phase_merging: 'Merging data', sync_phase_pushing: 'Pushing local changes', sync_phase_completed: 'Sync completed',
+    sync_phase_failed: 'Sync incomplete', sync_phase_interrupted: 'Previous sync interrupted',
+    sync_error_auth: 'Sign in again and check token permissions.', sync_error_private: 'Make the remote repository private, then retry.',
+    sync_error_clock: 'Correct the device clock, then retry.', sync_error_busy: 'A sync is already running. Wait for it to finish.',
+    sync_error_interrupted: 'The previous run was interrupted. Local changes remain available; sync again.', sync_error_retry: 'Check the network and sync configuration, then retry.',
+    auto_sync_paused: 'Scheduled sync paused. Resolve the issue, then sign in or save the schedule to resume.',
     tab_access: "API", tab_cli: "CLI",
     api_https_port: "HTTPS port",
     api_http_plain: "HTTP (no certificate)", api_http_port: "HTTP port", api_certificate_mode: "Certificate mode",

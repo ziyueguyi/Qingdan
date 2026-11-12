@@ -8,6 +8,9 @@ import android.webkit.*;
 import android.widget.*;
 import androidx.webkit.WebViewAssetLoader;
 import androidx.core.content.FileProvider;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import org.json.JSONObject;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
@@ -15,13 +18,24 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private WebView web;
-    private final ExecutorService executor=Executors.newSingleThreadExecutor();
+    private final ExecutorService executor=Executors.newFixedThreadPool(4);
+    private final ExecutorService lifecycleExecutor=Executors.newSingleThreadExecutor();
     private ValueCallback<Uri[]> fileCallback;
     private static final String HOME="https://appassets.androidplatform.net/assets/web/index.html";
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        web=new WebView(this);setContentView(web);
-        web.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
+        WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
+        FrameLayout root=new FrameLayout(this);
+        web=new WebView(this);
+        root.addView(web,new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        // WebView content ignores ordinary View padding. Inset its parent instead.
+        ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{
+            androidx.core.graphics.Insets safe=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout()|WindowInsetsCompat.Type.ime());
+            v.setPadding(safe.left,safe.top,safe.right,safe.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
+        ViewCompat.requestApplyInsets(root);
         WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);settings.setAllowFileAccess(false);settings.setAllowContentAccess(true);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         WebViewAssetLoader loader=new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
         web.setWebViewClient(new WebViewClient(){
@@ -72,7 +86,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==7&&fileCallback!=null){fileCallback.onReceiveValue(result==RESULT_OK&&data!=null?new Uri[]{data.getData()}:null);fileCallback=null;}}
     private void handleBack(){web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}const m=document.getElementById('mask');if(m&&!m.hidden){const b=m.querySelector('[data-act=close-modal]');if(b)b.click();else m.hidden=true;return true;}const a=document.getElementById('app');if(a.classList.contains('phone-detail')){a.classList.remove('phone-detail');return true;}if(a.classList.contains('phone-nav')){a.classList.remove('phone-nav');return true;}return false;})()",handled->{if(!"true".equals(handled))finish();});}
     @Override public void onBackPressed(){handleBack();}
-    @Override protected void onResume(){super.onResume();if(!executor.isShutdown())executor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":true}"));}
-    @Override protected void onPause(){super.onPause();if(!executor.isShutdown())executor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":false}"));}
-    @Override protected void onDestroy(){if(fileCallback!=null)fileCallback.onReceiveValue(null);executor.shutdown();web.removeJavascriptInterface("QingdanAndroid");web.destroy();super.onDestroy();}
+    @Override protected void onResume(){super.onResume();if(!lifecycleExecutor.isShutdown())lifecycleExecutor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":true}"));}
+    @Override protected void onPause(){super.onPause();if(!lifecycleExecutor.isShutdown())lifecycleExecutor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":false}"));}
+    @Override protected void onDestroy(){if(fileCallback!=null)fileCallback.onReceiveValue(null);executor.shutdown();lifecycleExecutor.shutdown();web.removeJavascriptInterface("QingdanAndroid");web.destroy();super.onDestroy();}
 }

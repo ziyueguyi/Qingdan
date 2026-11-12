@@ -6,7 +6,7 @@
  */
 import { catalogs, catalogItems, subscribeCatalog, scrollCatalog, PAGE_SIZE, ROW_HEIGHT } from "./catalog.js";
 import { configureAccessUI, loadAccess, renderAccessTab, renderCliTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
-import { call, hasFeature, loadFeatures, featureCount } from "./api.js";
+import { call, ApiError, hasFeature, loadFeatures, featureCount } from "./api.js";
 import { t, setLang, locale } from "./i18n.js";
 import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError } from "./store.js";
 
@@ -703,11 +703,12 @@ function renderDataTab() {
 
 /** 同步页签：登录 → 建私有仓 → 双向同步。全部走真接口（auth.* / repo.ensure / sync.*）。 */
 function renderSyncTab() {
-  const a = state.auth, s = state.syncStatus;
+  const a = state.auth, s = state.syncStatus || {};
   if (!a) return `<div class="loading">${esc(t("booting"))}</div>`;
 
   if (!a.authed) {
     return `
+    <div id="sync-live" aria-live="polite">${renderSyncLive()}</div>
     <div class="field"><label>${esc(t("token"))}</label>
       <div class="ctl" style="display:flex;gap:8px">
         <input class="ctl" type="password" id="qd-token" autocomplete="off" placeholder="••••••••••••">
@@ -720,16 +721,11 @@ function renderSyncTab() {
   const repoName = (a.repo && a.repo.name) || t("repo_not_ready");
   const blocked = s && s.push_blocked_key ? syncBlockedText(s) : "";
   return `
+    <div id="sync-live" aria-live="polite">${renderSyncLive()}</div>
     <div class="field"><label>${esc(t("account"))}</label>
       <div class="ctl desc">${esc(a.login || "—")} · ${esc(repoName)}
         <span class="lock">🔒 ${esc(t("priv_lock"))}</span></div></div>
-    <div class="field"><label>${esc(t("sync_state"))}</label><div class="ctl desc">
-      ${esc(SYNC_MODE_KEY[(s && s.mode) || "merge"] ? t(SYNC_MODE_KEY[s.mode || "merge"]) : t("sync_mode_unknown"))}
-      · ${esc(t("pending_n", { n: s ? s.pending : 0 }))}
-      · ${esc(t("conflicts_n", { n: s ? s.conflicts : 0 }))}
-      ${s && s.conflicts ? `<button class="btn warn" data-act="sync-conflicts">⚠ ${esc(t("conflicts_open", { n: s.conflicts }))}</button>` : ""}
-      ${s && s.last_sync_at ? "· " + esc(t("last_sync")) + " " + esc(new Date(s.last_sync_at).toLocaleString(locale())) : ""}
-    </div></div>
+    <div class="field"><label>${esc(t("sync_state"))}</label><div class="ctl desc" id="sync-state-live">${renderSyncStateLine(s)}</div></div>
     ${blocked ? `<div class="warnbar">${esc(blocked)}</div>` : ""}
     <div class="field"><label></label><div class="ctl" style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn pri" data-act="sync-run">⇅ ${esc(t("sync_now"))}</button>
@@ -750,8 +746,60 @@ function renderAutoSync() {
     <div class="field"><label>${esc(t('auto_sync_mode'))}</label><select class="ctl" id="auto-sync-mode"><option value="interval" ${c.mode==='interval'?'selected':''}>${esc(t('auto_sync_interval'))}</option><option value="daily" ${c.mode==='daily'?'selected':''}>${esc(t('auto_sync_daily'))}</option></select></div>
     <div class="field"><label>${esc(t('auto_sync_minutes'))}</label><input class="ctl" type="number" id="auto-sync-minutes" min="${a.minimum_interval_minutes}" max="10080" value="${c.interval_minutes}"></div>
     <div class="field"><label>${esc(t('auto_sync_times'))}</label><input class="ctl" id="auto-sync-times" value="${esc(c.times.join(', '))}" placeholder="09:00, 18:00"></div>
-    <p class="desc">${esc(t('auto_sync_note'))}</p><p class="desc">${esc(t('auto_sync_next'))}: ${s.next_at?esc(new Date(s.next_at).toLocaleString(locale())):'—'}</p><p class="desc">${esc(t('auto_sync_last'))}: ${s.last_success_at?esc(new Date(s.last_success_at).toLocaleString(locale())):'—'} ${esc(s.error_code||'')}</p>
+    <p class="desc">${esc(t('auto_sync_note'))}</p><div id="auto-sync-live">${renderAutoSyncLive(s)}</div>
     <div class="btnrow"><button class="btn pri" data-act="auto-sync-save">${esc(t('save'))}</button></div></section>`;
+}
+
+function renderSyncStateLine(s) {
+  return `${esc(t(SYNC_MODE_KEY[s.mode || 'merge'] || 'sync_mode_unknown'))}
+    · ${esc(t('pending_n',{n:s.pending||0}))} · ${esc(t('conflicts_n',{n:s.conflicts||0}))}
+    ${s.conflicts ? `<button class="btn warn" data-act="sync-conflicts">⚠ ${esc(t('conflicts_open',{n:s.conflicts}))}</button>` : ''}
+    ${s.last_sync_at ? '· '+esc(t('last_sync'))+' '+esc(new Date(s.last_sync_at).toLocaleString(locale())) : ''}`;
+}
+
+function syncErrorText(code) {
+  if (['AUTH_REQUIRED','TOKEN_INVALID','TOKEN_EXPIRED','SCOPE_MISSING'].includes(code)) return t('sync_error_auth');
+  if (['REPO_PUBLIC','REPO_NOT_PRIVATE'].includes(code)) return t('sync_error_private');
+  if (code === 'clock_skew' || code === 'CLOCK_SKEW') return t('sync_error_clock');
+  if (code === 'SYNC_BUSY') return t('sync_error_busy');
+  if (code === 'SYNC_INTERRUPTED') return t('sync_error_interrupted');
+  return code ? t('sync_error_retry') : '';
+}
+
+function renderSyncLive() {
+  const p=state.syncProgress || {}, a=state.autoSync?.status || {};
+  const labels={idle:'sync_phase_idle',preparing:'sync_phase_preparing',fetching:'sync_phase_fetching',merging:'sync_phase_merging',pushing:'sync_phase_pushing',completed:'sync_phase_completed',failed:'sync_phase_failed',interrupted:'sync_phase_interrupted'};
+  const label=t(labels[p.phase] || 'sync_phase_idle');
+  return `<div class="${p.error_code || a.paused ? 'warnbar' : 'hint'}"><b>${esc(label)}</b>
+    ${p.phase==='completed' ? esc(t('sync_result_counts',{pulled:p.pulled||0,pushed:p.pushed||0,conflicts:p.conflicts||0})) : ''}
+    ${p.finished_at ? `<span class="desc"> ${esc(new Date(p.finished_at).toLocaleString(locale()))}</span>` : ''}
+    ${p.error_code ? `<p>${esc(syncErrorText(p.error_code))}</p>` : ''}
+    ${a.paused ? `<p>${esc(t('auto_sync_paused'))} ${esc(syncErrorText(a.error_code))}</p>` : ''}</div>`;
+}
+
+function renderAutoSyncLive(s) {
+  return `<p class="desc">${esc(t('auto_sync_next'))}: ${s.next_at?esc(new Date(s.next_at).toLocaleString(locale())):'—'}</p>
+    <p class="desc">${esc(t('auto_sync_last'))}: ${s.last_success_at?esc(new Date(s.last_success_at).toLocaleString(locale())):'—'} ${esc(syncErrorText(s.error_code))}</p>`;
+}
+
+let syncPollBusy=false;
+async function refreshSyncPanel() {
+  const panel=document.querySelector('.settings-content[data-settings-page="sync"]');
+  if (!state.booted || document.hidden || !panel || syncPollBusy) return;
+  syncPollBusy=true;
+  try {
+    const [progress, autoSync, status]=await Promise.all([call('sync.progress'),call('autosync.config_get'),state.auth?.authed?call('sync.status').catch(()=>null):Promise.resolve(null)]);
+    if (!panel.isConnected) return;
+    // Update status only: re-rendering the modal would destroy an edited schedule or token draft.
+    state.syncProgress=progress; state.autoSync=autoSync;
+    const live=panel.querySelector('#sync-live'), scheduled=panel.querySelector('#auto-sync-live'), details=panel.querySelector('#sync-state-live');
+    if(status)state.syncStatus=status;
+    if(live)live.innerHTML=renderSyncLive();
+    if(scheduled)scheduled.innerHTML=renderAutoSyncLive(autoSync.status);
+    if(details&&status&&!details.contains(document.activeElement))details.innerHTML=renderSyncStateLine(status);
+    panel.querySelectorAll('[data-act="sync-run"],[data-act="sync-pull"]').forEach(button=>{button.disabled=!!progress.running;});
+  } catch(error) { console.warn('[sync-progress]',error); }
+  finally { syncPollBusy=false; }
 }
 
 // 后端只回机器键，文案在这里配（拼键名的写法会被 i18n 静态扫描漏掉，所以用显式表）。
@@ -782,10 +830,12 @@ async function doSync(feature) {
     if (!(state.auth && state.auth.repo && state.auth.repo.name)) await call("repo.ensure", {});
     const r = await call(feature, {});
     await Promise.all([loadAll(), loadSync()]);
-    openSettings("sync");
+    await refreshSyncPanel();
     if (r.ok === false && r.error_key === "clock_skew") {
       snackbar(syncBlockedText({ push_blocked_key: "clock_skew",
                                  clock_offset_ms: (state.syncStatus || {}).clock_offset_ms }), false);
+    } else if(r.ok === false) {
+      throw new ApiError(r.error_key || 'SYNC_FAILED',syncErrorText(r.error_key || 'SYNC_FAILED'));
     } else {
       snackbar(t("sync_done", { pulled: r.pulled || 0, pushed: r.pushed || 0,
                                 conflicts: r.conflicts || 0 }), false);
@@ -1870,6 +1920,7 @@ async function boot() {
     patch({ booted: true });
     render();
     setInterval(refreshExternalChanges, 2000);
+    setInterval(refreshSyncPanel, 2000);
     addEventListener("focus", refreshExternalChanges);
   } catch (e) {
     $("scroll").innerHTML = `<div class="empty">${t("boot_fail")}</div>

@@ -141,6 +141,8 @@ class Store:
         self._local = threading.local()
         self._lock = threading.Lock()
         self.operation_lock = threading.RLock()
+        self.sync_lock = threading.RLock()  # Git worktree operations, independent of task editing.
+        self.autosync_lock = threading.Lock()
         self.db.executescript(SCHEMA)          # 建表只需做一次，WAL 下其它连接可见
         if not self._setting("catalog_tag_index_v1"):
             self.db.execute(
@@ -333,12 +335,14 @@ class Store:
 
     def set_base_many(self, rows: Iterable[tuple[str, Rev, bool]]) -> int:
         """一轮推送成功后批量落 base。合并成一次事务，避免 N 次 commit。"""
-        batch = [(rev.ms, rev.seq, rev.dev, int(deleted), item_id)
+        batch = [(rev.ms, rev.seq, rev.dev, int(deleted),
+                  rev.ms, rev.seq, rev.dev, int(deleted), item_id)
                  for item_id, rev, deleted in rows]
         if not batch:
             return 0
         self.db.executemany(
-            "UPDATE item SET base_ms=?, base_seq=?, base_dev=?, base_deleted=?, dirty=0 WHERE id=?",
+            "UPDATE item SET base_ms=?, base_seq=?, base_dev=?, base_deleted=?, "
+            "dirty=CASE WHEN rev_ms=? AND rev_seq=? AND rev_dev=? AND deleted=? THEN 0 ELSE 1 END WHERE id=?",
             batch)
         self.db.commit()
         return len(batch)
