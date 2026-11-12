@@ -121,7 +121,7 @@ jobs:
           license_status=${PIPESTATUS[1]}
           set -o pipefail
           test "$license_status" -eq 0
-          "$sdkmanager" 'platform-tools' 'platforms;android-37' 'build-tools;37.0.0'
+          "$sdkmanager" 'platform-tools' 'platforms;android-37.2' 'build-tools;37.0.0'
       - name: Prepare shared Android runtime
         run: |
           python -m pip install 'dulwich==1.2.21'
@@ -150,10 +150,11 @@ jobs:
       - name: Verify offline Android app on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 37
-          target: google_apis
+          api-level: '37.2'
+          target: google_apis_ps16k
           arch: x86_64
           profile: pixel_6
+          ram-size: 4096M
           disable-animations: true
           script: cd android && gradle connectedEmulatorDebugAndroidTest --stacktrace
       - name: Package Android download

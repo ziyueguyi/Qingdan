@@ -5,7 +5,9 @@ def versionParts = sharedVersion.split('\\.').collect { it.toInteger() }
 
 android {
     namespace 'com.ziyueguyi.qingdan'
-    compileSdk 37
+    compileSdk {
+        version = release(37) { minorApiLevel = 2 }
+    }
     defaultConfig {
         applicationId 'com.ziyueguyi.qingdan'
         minSdk 24
