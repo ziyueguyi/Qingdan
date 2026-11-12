@@ -1,0 +1,23 @@
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_52e5bfb5b858a8 1-54
+tests/test_workdays.py
+  s_7909b70258899a::t_1db0be9cdadeb8 1-55
+src/qingdan/core/workdays.py
+  s_7909b70258899a::t_1db0be9cdadeb8 1-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa6a91f651d914b58368f2115d3e42278fa5f1c4",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
