@@ -1,0 +1,21 @@
+docs/0.3.1-稳定性改造与验收.md
+  s_7909b70258899a::t_519eff9d27e541 3,25-27,29-33,38-42
+docs/后续优化目标与执行计划.md
+  s_7909b70258899a::t_519eff9d27e541 5,7-11,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "13c4ceab353965379583124afd56b9c1abbb6a31",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
