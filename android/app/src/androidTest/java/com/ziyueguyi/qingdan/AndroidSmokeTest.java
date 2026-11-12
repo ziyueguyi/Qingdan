@@ -52,6 +52,13 @@ public class AndroidSmokeTest {
                 assert b'"deleted":true' in a.read_tree(head)['items/task/smoke.json']
             """);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            // A navigation can discard evaluateJavascript callbacks from the blank page.
+            AtomicReference<Boolean> loaded=new AtomicReference<>(false);
+            for(int i=0;i<120&&!loaded.get();i++){
+                scenario.onActivity(a->loaded.set(a.getWebView().getProgress()==100&&a.getWebView().getUrl()!=null&&a.getWebView().getUrl().endsWith("/index.html")));
+                if(!loaded.get())Thread.sleep(500);
+            }
+            assertTrue("Offline document did not finish loading",loaded.get());
             boolean ready=false;
             for(int i=0;i<60;i++){
                 String state=js(scenario,"Boolean(document.querySelector('[data-view=inbox]'))");
