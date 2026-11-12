@@ -30,6 +30,7 @@ public class AndroidSmokeTest {
         JSONObject schedule=call("autosync.config_set","{\"enabled\":true,\"mode\":\"daily\",\"times\":[\"09:00\",\"18:00\"]}");
         assertEquals(15,schedule.getInt("minimum_interval_minutes"));assertTrue(schedule.getJSONObject("status").getLong("next_at")>0);
         call("autosync.config_set","{\"enabled\":false}");
+        assertEquals("platform_unsupported",call("app.autostart_get","{}").getString("reason_key"));
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
             boolean ready=false;
             for(int i=0;i<60;i++){
@@ -40,7 +41,7 @@ public class AndroidSmokeTest {
             js(scenario,"document.querySelector('[data-view=inbox]').click();true");
             boolean visible=false;
             for(int i=0;i<30;i++){if("true".equals(js(scenario,"document.body.innerText.includes('Android smoke task')"))){visible=true;break;}Thread.sleep(300);}
-            assertTrue("Android bridge did not render saved task",visible);
+            assertTrue("Android bridge did not render saved task: "+js(scenario,"document.body.innerText.slice(-2500)"),visible);
             assertEquals("true",js(scenario,"document.documentElement.dataset.platform==='android'"));
             assertEquals("true",js(scenario,"document.querySelector('.main').getBoundingClientRect().width<=innerWidth"));
         }

@@ -43,6 +43,10 @@ def dispatch(name,params):
             if raw.get('active'):loop.start();scheduler.start()
             else:loop.stop();scheduler.stop()
             data={'active':bool(raw.get('active'))}
+        elif name=='app.autostart_get':
+            data={'enabled':False,'command':None,'expected':None,'frozen':False,'reason_key':'platform_unsupported'}
+        elif name=='app.autostart_set':
+            raise QdError('PLATFORM_UNSUPPORTED','安卓后台任务由系统管理',409)
         elif name=='meta.features':
             data={n:{'http':list(f.http),'cli':f.cli,'params':list(f.params),'needs_auth':f.needs_auth} for n,f in REGISTRY.items()}
         elif name.startswith('access.'):
@@ -50,4 +54,9 @@ def dispatch(name,params):
         else:data=call(name,**raw)
         return json.dumps({'ok':True,'data':data},ensure_ascii=False)
     except QdError as error:return json.dumps({'ok':False,'error':{'code':error.code,'message':error.message,'detail':error.detail}})
-    except Exception:return json.dumps({'ok':False,'error':{'code':'ANDROID_ERROR','message':'操作失败，请检查配置或重启应用'}})
+    except Exception as error:
+        import traceback
+        from java import jclass
+        frames=' > '.join(f'{f.name}:{f.lineno}' for f in traceback.extract_tb(error.__traceback__))
+        jclass('android.util.Log').e('Qingdan',f'{name}: {type(error).__name__} at {frames}')
+        return json.dumps({'ok':False,'error':{'code':'ANDROID_ERROR','message':'操作失败，请检查配置或重启应用'}})

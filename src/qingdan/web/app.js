@@ -685,13 +685,13 @@ function renderDataTab() {
       <input type="file" id="import-file" accept=".json" style="display:none" data-act="import-file">
       <span class="desc">${esc(t("import_hint"))}</span></div></div>
 
-    <div class="group-t" style="margin-top:14px">${esc(t("autostart_section"))}</div>
+    ${globalThis.QingdanAndroid ? '' : `<div class="group-t" style="margin-top:14px">${esc(t("autostart_section"))}</div>
     <div class="field"><label>${esc(t("autostart_on"))}</label>
       <div class="ctl" style="display:flex;gap:10px;align-items:center">
         <div class="tog ${as && as.enabled ? "on" : ""} ${as && !as.frozen ? "dis" : ""}"
              data-act="autostart-toggle" data-v="${as && as.enabled ? "false" : "true"}"></div>
         <span class="desc">${as && as.reason_key ? esc(autostartReasonText(as.reason_key))
-          : (as && as.command ? esc(t("autostart_path", { path: as.command })) : "")}</span></div></div>
+          : (as && as.command ? esc(t("autostart_path", { path: as.command })) : "")}</span></div></div>`}
 
     <div class="group-t" style="margin-top:14px">${esc(t("data_dir"))}</div>
     <div class="desc">${esc((state.health && state.health.data_dir) || "")}
