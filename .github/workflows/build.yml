@@ -139,6 +139,11 @@ jobs:
             echo 'signed=false' >> "$GITHUB_OUTPUT"
             echo 'Signing secrets absent; only an unsigned validation APK will be produced.'
           fi
+        # Windows PKCS12 exports may expose a numeric Java alias; keep the same key.
+        # Normalize only the alias after loading it from repository secrets.
+      - name: Validate persistent signing key
+        if: steps.signing.outputs.signed == 'true'
+        run: python scripts/normalize_android_keystore.py
       - name: Build phone and emulator APKs
         working-directory: android
         run: gradle assembleArm64Release assembleEmulatorDebug --stacktrace
