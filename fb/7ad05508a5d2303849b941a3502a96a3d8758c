@@ -1,0 +1,23 @@
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidSmokeTest.java
+  s_7909b70258899a::t_cb0c1e67ff4901 73-77
+scripts/verify_android.sh
+  s_7909b70258899a::t_cb0c1e67ff4901 1-9
+.github/workflows/build.yml
+  s_7909b70258899a::t_cb0c1e67ff4901 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb7ad05508a5d2303849b941a3502a96a3d8758c",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
