@@ -1,0 +1,23 @@
+android/app/src/main/java/com/ziyueguyi/qingdan/MainActivity.java
+  s_7909b70258899a::t_23223bc80d1318 11-13,27-38
+docs/0.3.1-稳定性改造与验收.md
+  s_7909b70258899a::t_23223bc80d1318 27-28
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidSmokeTest.java
+  s_7909b70258899a::t_23223bc80d1318 73-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "46a030f7f4226749a8b77117268d81fbc6a31d15",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
