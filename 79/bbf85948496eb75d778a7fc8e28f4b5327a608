@@ -1,0 +1,88 @@
+src/qingdan/core/store.py
+  s_7909b70258899a::t_c342b78f9b8dea 144-145,338-339,344-345
+src/qingdan/api/http.py
+  s_7909b70258899a::t_ecfca732e5f898 20,101-111
+src/qingdan/core/autosync.py
+  s_7909b70258899a::t_8c0b8465f52c55 115,117-128,130-132
+  s_7909b70258899a::t_73538a4a24fae8 14-16,51-53,60-73,76-77,79-80,83-84,86-90,92-111
+  s_7909b70258899a::t_00ef281f217246 58
+  s_7909b70258899a::t_aaa1d931f7abd8 74-75,78,91
+scripts/verify_android.sh
+  s_7909b70258899a::t_826c4d4c03c208 7-17
+src/qingdan/core/alerting/scheduler.py
+  s_7909b70258899a::t_c961a5e665d5e1 242
+  s_7909b70258899a::t_8c0b8465f52c55 212,217-219,225-229,241,245-246
+  s_7909b70258899a::t_75c45af1f207dd 213,240
+  s_7909b70258899a::t_5941c0dbcb2152 220-224,230-237
+README.md
+  s_7909b70258899a::t_02a8609cd90102 4,149-152
+  s_7909b70258899a::t_ff034df00ac4da 153
+android/app/src/main/java/com/ziyueguyi/qingdan/RuntimeBridge.java
+  s_7909b70258899a::t_a11545afdf5d1d 9
+src/qingdan/web/store.js
+  s_7909b70258899a::t_643bae223e166f 51,186,191,199
+android/app/src/main/java/com/ziyueguyi/qingdan/MainActivity.java
+  s_7909b70258899a::t_a11545afdf5d1d 18-19,76-78
+tests/test_scheduler_lifecycle.py
+  s_7909b70258899a::t_826c4d4c03c208 1-37
+  s_7909b70258899a::t_75c45af1f207dd 38-58
+android/app/src/main/java/com/ziyueguyi/qingdan/WorkerOutcome.java
+  s_7909b70258899a::t_73538a4a24fae8 13
+  s_7909b70258899a::t_aaedc5d1fec1cf 23-24
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidOfflineAlertsTest.java
+  s_7909b70258899a::t_53cde9bd856107 1-45,47-87,96-98
+  s_7909b70258899a::t_0109940aa12b8c 46,88-95
+pyproject.toml
+  s_7909b70258899a::t_0109940aa12b8c 7
+docs/0.3.1-稳定性改造与验收.md
+  s_7909b70258899a::t_2f644cf38948b4 1-29
+src/qingdan/core/registry.py
+  s_7909b70258899a::t_c342b78f9b8dea 66,84,115,254
+tests/test_sync_concurrency.py
+  s_7909b70258899a::t_ecfca732e5f898 127-154
+  s_7909b70258899a::t_606030650b9d6a 1-68,70-91,93-102
+  s_7909b70258899a::t_826c4d4c03c208 103-126
+  s_7909b70258899a::t_4e4dc6f2b372ba 69
+  s_7909b70258899a::t_85a50375f86dc9 92
+tests/test_autosync.py
+  s_7909b70258899a::t_aaa1d931f7abd8 101-110
+  s_7909b70258899a::t_8c0b8465f52c55 35-37,54-100
+src/qingdan/core/sync_api.py
+  s_7909b70258899a::t_5941c0dbcb2152 71-76,78,80,187-188,201-207,224-225,228-231,238-239,293-294
+  s_7909b70258899a::t_00ef281f217246 9-10,28-41,43-51,53-68,121-122,139-140,265-266,363-376,385-386,398-399,409-410,425,427-431
+  s_7909b70258899a::t_02a8609cd90102 357
+  s_7909b70258899a::t_c961a5e665d5e1 42,52,77,79
+  s_7909b70258899a::t_1175c7df67d4a9 69-70
+src/qingdan/web/app.js
+  s_7909b70258899a::t_aaa1d931f7abd8 774
+  s_7909b70258899a::t_643bae223e166f 9,706,711,724,749,760-773,775-790,792-794,797-798,801-804,833,837-838,1923
+  s_7909b70258899a::t_02a8609cd90102 728,753-759,791,795-796,799-800
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_643bae223e166f 10,12-17,270,272-277
+  s_7909b70258899a::t_aaa1d931f7abd8 11,271
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/WorkerOutcomeTest.java
+  s_7909b70258899a::t_aaedc5d1fec1cf 22
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidBridgeConcurrencyTest.java
+  s_7909b70258899a::t_aaedc5d1fec1cf 1-48
+src/qingdan/__init__.py
+  s_7909b70258899a::t_0109940aa12b8c 3
+src/qingdan/core/sync.py
+  s_7909b70258899a::t_c342b78f9b8dea 118,122,152-156,166,177-195,201-204,257-264,276-277,290-291,298-299,304,316-317,323-327
+  s_7909b70258899a::t_00ef281f217246 159-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "79bbf85948496eb75d778a7fc8e28f4b5327a608",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
