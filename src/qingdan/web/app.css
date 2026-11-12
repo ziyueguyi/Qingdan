@@ -424,7 +424,7 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
 .catalog-row .nav{height:34px}
 .catalog-row .list-edit{opacity:1;width:22px;font-size:17px}
 .field .compact-repeat{flex:0 0 auto;width:calc(3em + 28px);min-width:0;padding-left:6px;padding-right:4px}
-.rule-dialog{padding:0;width:430px;max-width:calc(100vw - 32px);max-height:80vh;overflow:auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.rule-dialog{margin:auto;padding:0;width:430px;max-width:calc(100vw - 32px);max-height:80vh;overflow:auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 .rule-dialog::backdrop{background:rgba(0,0,0,.25)}
 .rule-dialog .field>label{width:100px}
 .rule-dialog .ctl{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:6px;border-radius:var(--radius-s)}

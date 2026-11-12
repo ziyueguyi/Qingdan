@@ -302,7 +302,7 @@ def expand_recurring(items: list[Item], start: date | str, days: int, today: dat
             continue
         due_d = due.date()
         for nxt in rrule.upcoming(due, rule, n=int(days) + 2,
-                                  anchor=it.data.get("repeat_start"), end=end):
+                                  anchor=it.data.get("repeat_start"), end=end, warnings=[]):
             dd = nxt.date()
             if dd < d0 or dd < today_d or dd == due_d:
                 continue

@@ -429,11 +429,13 @@ async function fillRepeatInfo(id) {
     if (s.monthdays && s.monthdays.length) parts.push(t("rp_on_days", { d: s.monthdays.join(", ") }));
     if (s.until) parts.push(t("rp_until", { d: s.until }));
     if (s.count) parts.push(t("rp_count", { n: s.count }));
+    if (s.workday) parts.push(t(s.workday === "SKIP" ? "rp_workday_skip" : "rp_workday_next"));
     const h = info.history || {};
     const up = info.upcoming || [];
     box.innerHTML = `
       ${info.needs_due_key ? `<div class="hint warn">${esc(t(info.needs_due_key))}</div>` : ""}
       ${info.invalid_rule_key ? `<div class="hint warn">${esc(t(info.invalid_rule_key))}</div>` : ""}
+      ${(info.warnings || []).map(w=>`<div class="hint warn">${esc(w.message)}</div>`).join("")}
       <div class="row"><span class="k">${esc(t("rp_rule"))}</span>
         <span class="v">${esc(parts.filter(Boolean).join(" · ") || t("rp_none"))}</span></div>
       <div class="row"><span class="k">${esc(t("rp_next"))}</span>
@@ -1230,6 +1232,7 @@ async function onClick(ev) {
     case "rule-open": openRuleDialog(); break;
     case "rule-cancel": cancelRuleDialog(); break;
     case "rule-save": await saveRuleDialog(); break;
+    case "rule-preview": await previewRuleDialog(); break;
     case "task-save": await taskDialogSave(id || null); break;
     case "data-import": $("import-file")?.click(); break;
     case "alert-log": {
@@ -1586,7 +1589,12 @@ function setTaskAllDay(enabled) {
   input.value = value ? (enabled ? value.slice(0,10) : value.length === 10 ? value + "T09:00" : value) : "";
 }
 
-function openRuleDialog() {
+async function openRuleDialog() {
+  const taskRepeat = $("tk-repeat");
+  let calendar;
+  try { calendar = (await call("app.info")).workday_calendar; }
+  catch (error) { showError(error); return; }
+  if (!taskRepeat?.isConnected || taskRepeat !== $("tk-repeat")) return;
   let dialog = $("rule-dialog");
   if (!dialog) {
     dialog = document.createElement("dialog"); dialog.id = "rule-dialog"; dialog.className = "rule-dialog";
@@ -1606,11 +1614,14 @@ function openRuleDialog() {
       <div class="field"><label>${esc(t("rp_end_label"))}</label><select class="ctl" id="rule-end"><option value="never">${esc(t("rp_end_never"))}</option><option value="date" ${fields.UNTIL ? "selected" : ""}>${esc(t("rp_end_date"))}</option><option value="count" ${fields.COUNT ? "selected" : ""}>${esc(t("rp_end_count"))}</option></select></div>
       <div class="field" id="rule-until-row" ${fields.UNTIL ? "" : "hidden"}><label>${esc(t("d_due"))}</label><input class="ctl" id="rule-until" type="date" value="${esc((fields.UNTIL || "").replace(/^(\d{4})(\d{2})(\d{2}).*$/, "$1-$2-$3"))}"></div>
       <div class="field" id="rule-count-row" ${fields.COUNT ? "" : "hidden"}><label>${esc(t("rp_end_count"))}</label><input class="ctl" id="rule-count" type="number" min="1" max="10000" value="${esc(fields.COUNT || "10")}" required></div>
+      <div class="field"><label>${esc(t("rp_workday"))}</label><select class="ctl" id="rule-workday" data-calendar="${esc(fields["X-QD-CALENDAR"] || calendar?.id || "")}"><option value="">${esc(t("rp_workday_none"))}</option><option value="SKIP" ${fields["X-QD-WORKDAY"] === "SKIP" ? "selected" : ""}>${esc(t("rp_workday_skip"))}</option><option value="NEXT" ${fields["X-QD-WORKDAY"] === "NEXT" ? "selected" : ""}>${esc(t("rp_workday_next"))}</option></select></div>
+      <p class="desc">${esc(t("rp_workday_hint", {years:(calendar?.years || []).join(", ")}))}</p>
     </div>
     <div id="rule-advanced" ${advanced ? "" : "hidden"}><textarea class="ctl" id="rule-raw" rows="3" placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR">${esc(raw.startsWith("FREQ=") ? raw : `FREQ=${freq}`)}</textarea></div>
     <label class="chk"><input id="rule-allday" type="checkbox" ${$("tk-allday").checked ? "checked" : ""}>${esc(t("tk_allday"))}</label>
     <div class="hint danger" id="rule-error" role="alert" hidden></div>
-    <div class="btnrow"><button class="btn" data-act="rule-cancel">${esc(t("cancel"))}</button><button class="btn pri" data-act="rule-save">${esc(t("save"))}</button></div>
+    <div id="rule-preview-result" class="hint" aria-live="polite" hidden></div>
+    <div class="btnrow"><button class="btn" data-act="rule-cancel">${esc(t("cancel"))}</button><button class="btn" data-act="rule-preview">${esc(t("rp_preview"))}</button><button class="btn pri" data-act="rule-save">${esc(t("save"))}</button></div>
   </div>`;
   $("rule-mode").onchange = () => {
     const advanced = $("rule-mode").value === "advanced";
@@ -1619,6 +1630,7 @@ function openRuleDialog() {
   };
   $("rule-freq").onchange = () => { $("rule-weekdays").hidden = $("rule-freq").value !== "WEEKLY"; };
   $("rule-end").onchange = () => { $("rule-until-row").hidden = $("rule-end").value !== "date"; $("rule-count-row").hidden = $("rule-end").value !== "count"; };
+  dialog.oninput = () => { dialog.dataset.previewSeq = String(Number(dialog.dataset.previewSeq || 0) + 1); $("rule-preview-result").hidden = true; };
   dialog.showModal();
 }
 
@@ -1637,7 +1649,23 @@ function buildDialogRule() {
     if (!$("rule-count").reportValidity()) throw new Error(t("rp_invalid"));
     rule += ";COUNT=" + $("rule-count").value;
   }
+  if ($("rule-workday").value) rule += `;X-QD-WORKDAY=${$("rule-workday").value};X-QD-CALENDAR=${$("rule-workday").dataset.calendar}`;
   return rule;
+}
+
+async function previewRuleDialog() {
+  const dialog = $("rule-dialog"), ticket = String(Number(dialog.dataset.previewSeq || 0) + 1);
+  dialog.dataset.previewSeq = ticket;
+  const error = $("rule-error"), box = $("rule-preview-result");
+  error.hidden = true; box.hidden = true;
+  try {
+    const repeat = $("rule-mode").value === "advanced" ? $("rule-raw").value.trim() : buildDialogRule();
+    const preview = await call("task.repeat_preview", {repeat, due_at:$("tk-due").value || defaultDueText()});
+    if (!box.isConnected || !dialog.open || dialog.dataset.previewSeq !== ticket) return;
+    box.hidden = false;
+    const formatDate = value => new Intl.DateTimeFormat(locale(), {dateStyle:"medium", ...(value.includes("T") ? {timeStyle:"short"} : {})}).format(new Date(value.includes("T") ? value : value + "T00:00:00"));
+    box.innerHTML = `<strong>${esc(t("rp_first"))}</strong> ${esc(formatDate(preview.first_due_at))}<br>${esc((preview.upcoming || []).map(formatDate).join(" · "))}${(preview.warnings || []).map(w=>`<p class="danger">${esc(w.message)}</p>`).join("")}`;
+  } catch (e) { if (error.isConnected && dialog.open && dialog.dataset.previewSeq === ticket) { error.hidden = false; error.textContent = e.message; } }
 }
 
 function cancelRuleDialog() {

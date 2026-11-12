@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Iterator
 
+from qingdan.core import workdays
+
 FREQS = ("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 
 #: 星期缩写 → Python weekday()（周一=0）
@@ -44,6 +46,12 @@ class RuleError(ValueError):
     """规则不合法。service 层把它翻成 validation_error，视图层用 try_parse 吞掉。"""
 
 
+class CalendarError(RuleError):
+    def __init__(self, error: workdays.CalendarUnavailable):
+        self.calendar_id, self.year = error.calendar_id, error.year
+        super().__init__(str(error))
+
+
 @dataclass(frozen=True)
 class Rule:
     freq: str
@@ -52,6 +60,8 @@ class Rule:
     bymonthday: tuple[int, ...] = ()
     until: date | None = None
     count: int | None = None
+    workday: str | None = None
+    calendar_id: str | None = None
     raw: str = field(default="", compare=False)
 
 
@@ -103,7 +113,8 @@ def parse(text: Any) -> Rule:
             raise RuleError(f"RRULE 里 {k} 出现两次")
         parts[k] = v.strip()
 
-    unknown = set(parts) - {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL", "COUNT"}
+    unknown = set(parts) - {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL", "COUNT",
+                            "X-QD-WORKDAY", "X-QD-CALENDAR"}
     if unknown:
         # 明确拒绝而不是忽略：忽略了用户会以为生效了（宁缺毋假）
         raise RuleError(f"本实现不支持的 RRULE 键：{sorted(unknown)}"
@@ -173,8 +184,16 @@ def parse(text: Any) -> Rule:
     if until is not None and count is not None:
         raise RuleError("UNTIL 与 COUNT 不能同时出现（RFC 5545 同样禁止）")
 
+    policy = parts.get("X-QD-WORKDAY", "").upper() or None
+    calendar_id = parts.get("X-QD-CALENDAR", "").upper() or None
+    if (policy is None) != (calendar_id is None):
+        raise RuleError("X-QD-WORKDAY 与 X-QD-CALENDAR 必须同时指定")
+    if policy is not None and policy not in {"SKIP", "NEXT"}:
+        raise RuleError("X-QD-WORKDAY 只支持 SKIP（跳过）或 NEXT（顺延）")
+    if calendar_id is not None and calendar_id != workdays.CALENDAR_ID:
+        raise RuleError(f"不支持的工作日历版本：{calendar_id}，请更新客户端")
     return Rule(freq=freq, interval=interval, byday=byday, bymonthday=bymonthday,
-                until=until, count=count, raw=s)
+                until=until, count=count, workday=policy, calendar_id=calendar_id, raw=s)
 
 
 def try_parse(text: Any) -> Rule | None:
@@ -273,6 +292,17 @@ def occurrences(anchor: Any, rule: Rule, limit: int = _MAX_STEPS) -> Iterator[da
     for d in _dates(a, rule):
         if d < a:
             continue
+        if rule.until is not None and d > rule.until:
+            return
+        if rule.workday:
+            try:
+                if rule.workday == "SKIP":
+                    if not workdays.is_workday(d, rule.calendar_id):
+                        continue
+                else:
+                    d = workdays.on_or_after(d, rule.calendar_id)
+            except workdays.CalendarUnavailable as error:
+                raise CalendarError(error) from None
         if last is not None and d <= last:     # BYMONTHDAY 夹取可能撞日（如 30 与 -1）
             continue
         if rule.until is not None and d > rule.until:
@@ -309,7 +339,7 @@ def next_after(due: Any, rule: Rule | str | None, anchor: Any = None) -> datetim
 
 
 def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
-             end: Any = None) -> list[datetime]:
+             end: Any = None, warnings: list[dict] | None = None) -> list[datetime]:
     """`due` 之后的 n 次（可选限制到 `end` 日期），给界面预览与日历展开用。"""
     if rule is None or int(n) <= 0:
         return []
@@ -323,14 +353,22 @@ def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
         a = target
     end_d = _as_dt(end).date() if end else None
     out: list[datetime] = []
-    for d in occurrences(a, r):
-        if d <= target:
-            continue
-        if end_d is not None and d > end_d:
-            break
-        out.append(dt.replace(year=d.year, month=d.month, day=d.day))
-        if len(out) >= int(n):
-            break
+    try:
+        # Stop nominal iteration at the requested window before looking up an
+        # unknown future year. UNTIL and end both bound effective dates.
+        from dataclasses import replace
+        bounded = replace(r, until=min(r.until, end_d) if r.until and end_d else r.until or end_d)
+        for d in occurrences(a, bounded):
+            if d <= target:
+                continue
+            out.append(dt.replace(year=d.year, month=d.month, day=d.day))
+            if len(out) >= int(n):
+                break
+    except CalendarError as error:
+        if warnings is None:
+            raise
+        warnings.append({"key": "calendar_missing_year", "calendar_id": error.calendar_id,
+                         "year": error.year, "message": str(error)})
     return out
 
 
@@ -359,4 +397,7 @@ def summary(rule: Rule | str | None) -> dict[str, Any]:
         out["until"] = r.until.isoformat()
     if r.count is not None:
         out["count"] = r.count
+    if r.workday:
+        out["workday"] = r.workday
+        out["calendar_id"] = r.calendar_id
     return out
