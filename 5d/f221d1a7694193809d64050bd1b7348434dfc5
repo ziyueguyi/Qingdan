@@ -1,0 +1,43 @@
+src/qingdan/web/app.css
+  s_7909b70258899a::t_cc002da804ff6c 427
+docs/后续优化目标与执行计划.md
+  s_7909b70258899a::t_90168741dd651d 37-40
+src/qingdan/core/view.py
+  s_7909b70258899a::t_34dd6e65e2e0fb 305
+src/qingdan/core/service.py
+  s_7909b70258899a::t_4fecdc8cec0b40 407-408
+  s_7909b70258899a::t_3c97992a8c51cf 16,348,411,480-484
+  s_7909b70258899a::t_34dd6e65e2e0fb 428-451,546-547,555,725,740,746-749,765-769,771-773
+  s_7909b70258899a::t_ccd181e4795fe5 233
+  s_7909b70258899a::t_6c86b921d2cfb8 468-469
+src/qingdan/core/rrule.py
+  s_7909b70258899a::t_abbcedc3eba9ed 25-26,49-54,63-64,116-117,187-194,196,295-305,342,356-371,400-402
+tests/test_workday_rules.py
+  s_7909b70258899a::t_c90bad01a9483b 79-89
+  s_7909b70258899a::t_4fecdc8cec0b40 1-78,90-107
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_90168741dd651d 36-40
+src/qingdan/web/app.js
+  s_7909b70258899a::t_cc002da804ff6c 1666-1668
+  s_7909b70258899a::t_ccd181e4795fe5 432,438,1235,1592-1597,1617,1623-1624,1652,1656,1659-1663,1665
+  s_7909b70258899a::t_6c86b921d2cfb8 1618,1633,1657-1658,1664
+  s_7909b70258899a::t_e36dd22af311b9 1669-1670
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_ccd181e4795fe5 85-87,348-350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5df221d1a7694193809d64050bd1b7348434dfc5",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
