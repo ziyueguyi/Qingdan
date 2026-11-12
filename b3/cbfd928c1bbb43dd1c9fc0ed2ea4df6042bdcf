@@ -1,0 +1,30 @@
+README.md
+  s_7909b70258899a::t_afa851723d7ba9 1,4,10-12,39,47,53-55,219-223,225
+  s_7909b70258899a::t_4d5643ca2fc8d2 144-148
+  s_7909b70258899a::t_8b39abd96e1296 56
+docs/GitHub-自动构建.md
+  s_7909b70258899a::t_4d5643ca2fc8d2 1,11-18,25-26
+  s_7909b70258899a::t_8153c61a170701 27
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidSmokeTest.java
+  s_7909b70258899a::t_8f70f8cb6c81e8 33,44
+android/app/src/main/python/qingdan_android.py
+  s_7909b70258899a::t_8f70f8cb6c81e8 46-49,57-62
+src/qingdan/web/app.js
+  s_7909b70258899a::t_10930d49df5535 688,694
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b3cbfd928c1bbb43dd1c9fc0ed2ea4df6042bdcf",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
