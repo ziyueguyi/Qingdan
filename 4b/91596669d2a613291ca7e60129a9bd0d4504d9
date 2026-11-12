@@ -1,0 +1,28 @@
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/WorkerOutcomeTest.java
+  s_7909b70258899a::t_0b9a370b58f7e9 1-29
+android/app/src/main/java/com/ziyueguyi/qingdan/WorkerOutcome.java
+  s_7909b70258899a::t_0b9a370b58f7e9 7-8,12,14
+  s_7909b70258899a::t_dd28784d58fc1c 1-6,9-11,13,15-35
+docs/后续优化目标与执行计划.md
+  s_7909b70258899a::t_dd28784d58fc1c 1-36
+android/app/src/main/java/com/ziyueguyi/qingdan/AlertWorker.java
+  s_7909b70258899a::t_dd28784d58fc1c 1-18
+android/app/src/main/java/com/ziyueguyi/qingdan/SyncWorker.java
+  s_7909b70258899a::t_dd28784d58fc1c 8,13,15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b91596669d2a613291ca7e60129a9bd0d4504d9",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
