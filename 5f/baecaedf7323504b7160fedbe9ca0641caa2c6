@@ -1,0 +1,23 @@
+README.md
+  s_7909b70258899a::t_1eaeea789c7dfa 79,213,245
+docs/API-CLI-访问控制方案.md
+  s_7909b70258899a::t_bafe1576e8ebcf 1,7,9-11,19-20,70
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_1a5d8adc7f3f5d 519-536,547
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5fbaecaedf7323504b7160fedbe9ca0641caa2c6",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
