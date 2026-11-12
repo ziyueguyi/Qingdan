@@ -70,6 +70,18 @@ public class AndroidSmokeTest {
             for(int i=0;i<30;i++){if("true".equals(js(scenario,"document.body.innerText.includes('Android smoke task')"))){visible=true;break;}Thread.sleep(300);}
             assertTrue("Android bridge did not render saved task: "+js(scenario,"document.body.innerText.slice(-2500)"),visible);
             assertEquals("true",js(scenario,"document.documentElement.dataset.platform==='android'"));
+            AtomicReference<String> systemBars=new AtomicReference<>();
+            scenario.onActivity(a->{
+                android.view.View decor=a.getWindow().getDecorView();
+                androidx.core.view.WindowInsetsCompat insets=androidx.core.view.ViewCompat.getRootWindowInsets(decor);
+                if(insets==null){systemBars.set("Missing root insets");return;}
+                androidx.core.graphics.Insets safe=insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()|androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+                int[] position=new int[2],origin=new int[2];
+                a.getWebView().getLocationOnScreen(position);decor.getLocationOnScreen(origin);
+                int top=position[1]-origin[1],bottom=top+a.getWebView().getHeight();
+                systemBars.set(top>=safe.top&&bottom<=decor.getHeight()-safe.bottom?"safe":"top="+top+", bottom="+bottom+", status="+safe.top+", navigation="+safe.bottom+", window="+decor.getHeight());
+            });
+            assertEquals("Web content overlaps system bars: "+systemBars.get(),"safe",systemBars.get());
             android.graphics.Bitmap screenshot=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
             if(screenshot!=null)try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(context().getExternalFilesDir(null),"android-ui.png"))){screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}
             // Pixel 6 has a fractional CSS viewport; innerWidth is rounded to an integer.

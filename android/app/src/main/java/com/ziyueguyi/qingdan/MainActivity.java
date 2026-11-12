@@ -8,6 +8,9 @@ import android.webkit.*;
 import android.widget.*;
 import androidx.webkit.WebViewAssetLoader;
 import androidx.core.content.FileProvider;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import org.json.JSONObject;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
@@ -21,8 +24,18 @@ public class MainActivity extends Activity {
     private static final String HOME="https://appassets.androidplatform.net/assets/web/index.html";
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        web=new WebView(this);setContentView(web);
-        web.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
+        WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
+        FrameLayout root=new FrameLayout(this);
+        web=new WebView(this);
+        root.addView(web,new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        // WebView content ignores ordinary View padding. Inset its parent instead.
+        ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{
+            androidx.core.graphics.Insets safe=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout()|WindowInsetsCompat.Type.ime());
+            v.setPadding(safe.left,safe.top,safe.right,safe.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
+        ViewCompat.requestApplyInsets(root);
         WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);settings.setAllowFileAccess(false);settings.setAllowContentAccess(true);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         WebViewAssetLoader loader=new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
         web.setWebViewClient(new WebViewClient(){
