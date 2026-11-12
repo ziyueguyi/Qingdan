@@ -516,6 +516,24 @@ const DICT = {
   },
 };
 
+const ANDROID_DICT = {
+  zh: {
+    ch_toast: "Android 系统通知",
+    alert_note_local: "提醒配置与密钥只存本机，凭据通过 Android Keystore 加密，不同步到其它设备。后台执行可能因省电或休眠延迟。",
+    token_d: "仅勾选 projects 权限，凭据通过 Android Keystore 加密保存，不进入日志。",
+    booting: "正在读取本地数据…",
+    boot_fail: "本地数据加载失败，请关闭并重新打开应用。",
+    warn_clock_skew: "设备时间与服务器相差约 {min} 分钟，当前只拉取不推送。请校正系统时间后再同步。",
+  },
+  en: {
+    ch_toast: "Android system notification",
+    alert_note_local: "Alert settings and keys stay on this device. Credentials are encrypted with Android Keystore and never synced. Battery saving or sleep may delay background work.",
+    token_d: "Scope: projects only. Credentials are encrypted with Android Keystore and never logged.",
+    booting: "Loading local data…",
+    boot_fail: "Local data could not be loaded. Close and reopen the app.",
+    warn_clock_skew: "Device time differs from the server by about {min} minutes. Pull only; fix the system time before syncing.",
+  },
+};
 let LANG = "zh";
 const warned = new Set();
 
@@ -526,7 +544,7 @@ export function setLang(lang) {
 export function getLang() { return LANG; }
 
 export function t(key, vars) {
-  let s = (DICT[LANG] && DICT[LANG][key]) ?? DICT.zh[key];
+  let s = (globalThis.QingdanAndroid && ANDROID_DICT[LANG]?.[key]) || (DICT[LANG] && DICT[LANG][key]) || DICT.zh[key];
   if (s === undefined) {
     if (!warned.has(key)) {
       warned.add(key);

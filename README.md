@@ -76,7 +76,7 @@ py -3.14 -m venv .venv
 .venv\Scripts\pyinstaller.exe --noconfirm packaging\qingdan.spec
 .venv\Scripts\python.exe scripts\check_size.py <产物目录>     # 体积门禁 42MB，写 SIZE 留档
 .venv\Scripts\python.exe scripts\verify_release.py <产物目录> # 冻结包端到端验收
-.venv\Scripts\python.exe -m pytest -q                        # 751 用例 / 41 文件
+.venv\Scripts\python.exe -m pytest -q                        # 全量回归测试
 ```
 
 **SmartScreen**：未签名 exe 首次运行会被拦——「更多信息」→「仍要运行」，只拦一次。
@@ -210,7 +210,7 @@ Android 后台由 WorkManager 调度，间隔最低 15 分钟；省电、休眠�
 
 ## 11. API 与 CLI
 
-- 所有业务功能共用 `@feature` 注册表（当前 **112 个入口**），同时派生 Python API、HTTP 路由、
+- 所有业务功能共用 `@feature` 注册表（启动时从注册表读取实际入口），同时派生 Python API、HTTP 路由、
   CLI 子命令；契约测试保证注册表与路由 1:1 且每个都能经 HTTP 调通。
 - `QingdanCLI.exe`：标准子命令 + `call <功能名> --参数 值`；中文 JSON 输出、标准退出码；
   列表类分页响应 `total / items / limit / offset / has_more / next_offset`（默认 5 条、单页上限 100）。
@@ -242,7 +242,7 @@ QingdanCLI.exe --data-dir D:\your-data group list --limit 5 --offset 0
 ## 13. 给开发者
 
 ```powershell
-.venv\Scripts\python.exe -m pytest -q                 # 751 用例 / 41 文件
+.venv\Scripts\python.exe -m pytest -q                 # 全量回归测试
 .venv\Scripts\python.exe -m qingdan call task.list    # 任意功能的 CLI 入口
 .venv\Scripts\python.exe -u scripts\dev_fake_cloud.py # 假 Gitee + 本地裸仓库，不联网验同步
 ```
