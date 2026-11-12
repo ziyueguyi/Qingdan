@@ -209,34 +209,41 @@ class Scheduler:
         self.tick = tick
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._lifecycle_lock = threading.Lock()
+        self._run_lock = threading.Lock()
         self.last = {"due": 0, "sent": 0, "failed": 0, "skipped": 0}
 
     def start(self, skip_stale: bool = True) -> None:
-        if skip_stale:
-            # 必须在扫描之前：否则开机瞬间这批过期作业会被一起涌出
-            n = _store().alert_skip_stale(int(self.tick() * 1000) - STALE_GRACE_MS)
-            if n:
-                _store().alert_log_add("scheduler", "info", f"启动时跳过 {n} 条过期提醒")
-        if self._thread:
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="qingdan-alert")
-        self._thread.start()
+        with self._lifecycle_lock:
+            if self._thread and self._thread.is_alive() and not self._stop.is_set():
+                return
+            if skip_stale:
+                with _store().operation_lock:
+                    n = _store().alert_skip_stale(int(self.tick() * 1000) - STALE_GRACE_MS)
+                    if n:
+                        _store().alert_log_add("scheduler", "info", f"启动时跳过 {n} 条过期提醒")
+            self._stop = threading.Event()
+            self._thread = threading.Thread(target=self._loop, args=(self._stop,), daemon=True, name="qingdan-alert")
+            self._thread.start()
 
-    def _loop(self) -> None:
-        while not self._stop.wait(self.interval_s):
-            try:
-                self.run_once()
-            except Exception as e:                      # 调度线程绝不能因一次异常而死
-                _store().alert_log_add("scheduler", "error", f"{type(e).__name__}: {e}")
+    def _loop(self, stop_event) -> None:
+        try:
+            while not stop_event.wait(self.interval_s):
+                try:
+                    self.run_once()
+                except Exception as e:
+                    _store().alert_log_add("scheduler", "error", f"{type(e).__name__}: {e}")
+        finally:
+            if ctx.store:ctx.store.close()
 
     def run_once(self) -> dict:
-        self.last = dispatch(int(self.tick() * 1000))
-        return self.last
+        with self._run_lock:
+            self.last = dispatch(int(self.tick() * 1000))
+            return self.last
 
     def stop(self) -> None:
-        self._stop.set()
-        self._thread = None
+        with self._lifecycle_lock:
+            self._stop.set()
 
 
 scheduler = Scheduler()

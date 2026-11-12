@@ -19,6 +19,7 @@ public class WorkerOutcomeTest {
         assertEquals(Result.retry(), WorkerOutcome.fromResponse("{\"ok\":false,\"error\":{\"code\":\"NETWORK\"}}"));
         assertEquals(Result.retry(), WorkerOutcome.fromResponse("not JSON"));
         assertEquals(Result.retry(), WorkerOutcome.fromResponse("{}"));
+        assertEquals(Result.retry(), WorkerOutcome.fromResponse("{\"ok\":true}"));
     }
 
     @Test public void credentialsRequireUserActionInsteadOfAutomaticRetry() {

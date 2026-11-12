@@ -63,6 +63,7 @@ class Feature:
     idempotent: bool = False
     doc: str = ""
     params: tuple[str, ...] = ()
+    manages_lock: bool = False      # Network operations protect their own short mutations.
 
     @property
     def action(self) -> str:
@@ -80,6 +81,7 @@ def feature(
     undoable: bool = False,
     needs_auth: bool = False,
     idempotent: bool = False,
+    manages_lock: bool = False,
 ) -> Callable:
     """把一个函数登记为「功能」。缺 http 直接报错，这是 R4 的制度保障。"""
 
@@ -110,6 +112,7 @@ def feature(
             undoable=undoable,
             needs_auth=needs_auth,
             idempotent=idempotent,
+            manages_lock=manages_lock,
             doc=(fn.__doc__ or "").strip(),
             params=tuple(
                 p.name for p in sig.parameters.values()
@@ -248,7 +251,7 @@ def call(feature_name: str, /, **raw: Any) -> Any:
     # Access administration has its own database and must be able to stop the
     # remote server without holding the task-operation lock.
     st = ctx.store if f.group != 'access' else None
-    with st.operation_lock if st is not None else nullcontext():
+    with st.operation_lock if st is not None and not f.manages_lock else nullcontext():
         if st is not None:
             st.op_begin()
         try:

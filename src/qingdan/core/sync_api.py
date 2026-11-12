@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import time
+import threading
+from functools import wraps
 from typing import Any
 
 from qingdan import __version__
@@ -23,6 +25,59 @@ TOKEN_KEY = "gitee_token"
 REPO_STATE = "repo"
 DEFAULT_REPO_NAME = "qd-data"          # 刻意取无语义名，降低在账号列表里的辨识度
 REPO_DESC = "Qingdan 任务清单数据仓库（客户端自动同步，请勿手工编辑）"
+PROGRESS_KEY = 'sync_progress'
+_active_stores = set()
+_active_lock = threading.Lock()
+
+
+def _update_progress(store, **values):
+    with store.operation_lock:
+        current = store.state_get(PROGRESS_KEY) or {}
+        current.update(values, updated_at=int(time.time()*1000))
+        store.state_set(PROGRESS_KEY, current)
+
+
+def _tracked_sync(fn):
+    @wraps(fn)
+    def run(*args, **kwargs):
+        store = _store()
+        if not store.sync_lock.acquire(blocking=False):
+            raise QdError('SYNC_BUSY', '已有同步操作正在执行', 409)
+        with _active_lock:
+            _active_stores.add(store)
+        try:
+            _update_progress(store, running=True, operation=fn.__name__, phase='preparing',
+                             started_at=int(time.time()*1000), finished_at=None,
+                             error_code=None, pulled=0, pushed=0, conflicts=0)
+            result = fn(*args, **kwargs)
+            ok = result.get('ok', True)
+            _update_progress(store, running=False, phase='completed' if ok else 'failed',
+                             finished_at=int(time.time()*1000),
+                             error_code=None if ok else result.get('error_key') or 'SYNC_FAILED',
+                             pulled=result.get('pulled', 0), pushed=result.get('pushed', 0),
+                             conflicts=result.get('conflicts', 0))
+            return result
+        except Exception as error:
+            _update_progress(store, running=False, phase='failed', finished_at=int(time.time()*1000),
+                             error_code=error.code if isinstance(error, QdError) else 'SYNC_FAILED')
+            raise
+        finally:
+            with _active_lock:
+                _active_stores.discard(store)
+            store.sync_lock.release()
+    return run
+
+
+def _sync_configuration(fn):
+    """Credentials and repository selection cannot change midway through a sync.
+
+    Wait outside the task-operation lock so ordinary local edits remain available.
+    """
+    @wraps(fn)
+    def run(*args, **kwargs):
+        with _store().sync_lock:
+            return fn(*args, **kwargs)
+    return run
 
 
 # --------------------------------------------------------------------------- 内部
@@ -63,7 +118,8 @@ def apply_server_offset(offset_ms: int) -> None:
     """
     store = ctx.store
     if store is not None:
-        store.clock.set_offset(offset_ms)
+        with store.operation_lock:
+            store.clock.set_offset(offset_ms)
 
 
 def _repo_conf() -> dict | None:
@@ -80,7 +136,8 @@ def _engine() -> tuple[SyncEngine, GitRepo]:
     # remote_url 允许覆盖：测试用本地裸仓库跑真实 git 往返，
     # 将来也支持自建 git 服务。没覆盖时才用「令牌拼进 URL」的 Gitee HTTPS 形式。
     git.remote_url = connect_url(conf)
-    return SyncEngine(_store(), git), git
+    store = _store()
+    return SyncEngine(store, git, on_progress=lambda phase: _update_progress(store, phase=phase)), git
 
 
 #: Gitee 的 HTTPS 主机。只有它我们能自动补上本机令牌，别的自建主机不能瞎猜。
@@ -127,7 +184,8 @@ def _note_warning(key: str) -> None:
 # --------------------------------------------------------------------------- 鉴权
 
 
-@feature(name="auth.login", group="auth", http=("POST", "/api/v1/auth/session"), needs_auth=False)
+@feature(name="auth.login", group="auth", http=("POST", "/api/v1/auth/session"), needs_auth=False, manages_lock=True)
+@_sync_configuration
 def auth_login(token: str) -> dict:
     """校验令牌后存入 DPAPI。令牌无效时不落库，避免"存了个坏令牌"这种更难查的状态。"""
     if not token or not token.strip():
@@ -140,9 +198,13 @@ def auth_login(token: str) -> dict:
     except GiteeError as e:
         raise QdError(e.code, e.message, e.status or 401) from e
 
-    _store().secret_set(TOKEN_KEY, secrets.protect(token.strip()))
-    ctx.authed = True
-    ctx.gitee_user = me["login"]
+    protected = secrets.protect(token.strip())
+    with _store().operation_lock:
+        _store().secret_set(TOKEN_KEY, protected)
+        ctx.authed = True
+        ctx.gitee_user = me["login"]
+        from qingdan.core.autosync import resume_after_auth
+        resume_after_auth()
     # 偏差已由 client 的 on_offset 回调写进 HLC（每个响应都更新），这里只回给界面看。
     return {"login": me["login"], "name": me.get("name"), "clock_offset_ms": probe.last_offset_ms,
             # 令牌怎么存的属于界面文案（前端 i18n 里讲），不放进响应体：
@@ -159,19 +221,22 @@ def auth_status() -> dict:
 
 
 @feature(name="auth.logout", group="auth", http=("DELETE", "/api/v1/auth/session"),
-         needs_auth=False)
+         needs_auth=False, manages_lock=True)
+@_sync_configuration
 def auth_logout() -> dict:
     """只清凭据、停自动同步。**不动本地数据，不删 dirty 队列，不碰远端仓库。**"""
-    _store().secret_delete(TOKEN_KEY)
-    ctx.authed = False
-    ctx.gitee_user = None
+    with _store().operation_lock:
+        _store().secret_delete(TOKEN_KEY)
+        ctx.authed = False
+        ctx.gitee_user = None
     return {"authed": False}
 
 
 # --------------------------------------------------------------------------- 仓库就绪
 
 
-@feature(name="repo.ensure", group="repo", http=("POST", "/api/v1/repo/prepare"), needs_auth=True)
+@feature(name="repo.ensure", group="repo", http=("POST", "/api/v1/repo/prepare"), needs_auth=True, manages_lock=True)
+@_sync_configuration
 def repo_ensure(name: str = DEFAULT_REPO_NAME) -> dict:
     """查仓库 → 不存在则建私有仓。幂等，可反复调用。
 
@@ -197,7 +262,8 @@ def repo_ensure(name: str = DEFAULT_REPO_NAME) -> dict:
     stored = _repo_conf() or {}
     if stored.get("remote_url"):
         conf["remote_url"] = stored["remote_url"]      # 测试/自建 git 的覆盖不被建仓流程冲掉
-    _store().state_set(REPO_STATE, conf)
+    with _store().operation_lock:
+        _store().state_set(REPO_STATE, conf)
     return {"full_name": f"{me['login']}/{name}", "private": True, "created": created,
             "branch": conf["branch"]}
 
@@ -224,7 +290,8 @@ def _manifest_bytes() -> bytes:
 
 
 @feature(name="repo.info", group="repo", http=("GET", "/api/v1/repo"),
-         idempotent=True, needs_auth=True)
+         idempotent=True, needs_auth=True, manages_lock=True)
+@_sync_configuration
 def repo_info() -> dict:
     conf = _repo_conf()
     if not conf:
@@ -287,13 +354,26 @@ def sync_status() -> dict:
             "last_sync_at": st.state_get("last_sync_at"),
             "pending": st.dirty_count(),
             "conflicts": st.db.execute("SELECT COUNT(*) c FROM conflict WHERE resolved_by IS NULL").fetchone()["c"],
-            "items": len(st.snapshot()),
+            "items": st.db.execute("SELECT COUNT(*) c FROM item").fetchone()['c'],
             "clock_offset_ms": offset,
             "skew_limit_ms": SKEW_LIMIT_MS,
             "push_blocked_key": "clock_skew" if abs(offset) > SKEW_LIMIT_MS else None}
 
 
-@feature(name="sync.run", group="sync", http=("POST", "/api/v1/sync/run"), needs_auth=True)
+@feature(name='sync.progress', group='sync', http=('GET', '/api/v1/sync/progress'),
+         idempotent=True, manages_lock=True)
+def sync_progress() -> dict:
+    store = _store()
+    result = store.state_get(PROGRESS_KEY) or {'running':False, 'phase':'idle'}
+    with _active_lock:
+        active = store in _active_stores
+    if result.get('running') and not active:
+        result.update(running=False, phase='interrupted', error_code='SYNC_INTERRUPTED')
+    return result
+
+
+@feature(name="sync.run", group="sync", http=("POST", "/api/v1/sync/run"), needs_auth=True, manages_lock=True)
+@_tracked_sync
 def sync_run() -> dict:
     prepare_remote()               # 哨兵 + 首次自动建仓
     engine, git = _engine()
@@ -302,7 +382,8 @@ def sync_run() -> dict:
     return report.as_dict()
 
 
-@feature(name="sync.pull", group="sync", http=("POST", "/api/v1/sync/pull"), needs_auth=True)
+@feature(name="sync.pull", group="sync", http=("POST", "/api/v1/sync/pull"), needs_auth=True, manages_lock=True)
+@_tracked_sync
 def sync_pull() -> dict:
     """只拉不推。新装机器或想看远端现状时用。"""
     engine, git = _engine()
@@ -314,7 +395,8 @@ def sync_pull() -> dict:
     return {"pulled": items, "head": head.hex() if head else None}
 
 
-@feature(name="sync.push", group="sync", http=("POST", "/api/v1/sync/push"), needs_auth=True)
+@feature(name="sync.push", group="sync", http=("POST", "/api/v1/sync/push"), needs_auth=True, manages_lock=True)
+@_tracked_sync
 def sync_push() -> dict:
     prepare_remote()               # 哨兵 + 首次自动建仓
     engine, git = _engine()
@@ -324,7 +406,8 @@ def sync_push() -> dict:
 
 
 @feature(name="sync.compact", group="sync", http=("POST", "/api/v1/sync/compact"),
-         needs_auth=True)
+         needs_auth=True, manages_lock=True)
+@_tracked_sync
 def sync_compact(days: int = compact_mod.DEFAULT_TOMBSTONE_DAYS) -> dict:
     """回收超期墓碑并写名册。名册是之后判断"离线复活"的唯一依据，不能省。"""
     prepare_remote()               # 哨兵 + 首次自动建仓
@@ -339,12 +422,13 @@ def sync_compact(days: int = compact_mod.DEFAULT_TOMBSTONE_DAYS) -> dict:
 
 
 @feature(name="sync.history", group="sync", http=("GET", "/api/v1/sync/history"),
-         idempotent=True, needs_auth=True)
+         idempotent=True, needs_auth=True, manages_lock=True)
 def sync_history(limit: int = 30) -> dict:
-    engine, git = _engine()
-    if not git.initialized:
-        git.clone(git.remote_url)
-    return {"items": git.history(limit)}
+    with _store().sync_lock:
+        engine, git = _engine()
+        if not git.initialized:
+            git.clone(git.remote_url)
+        return {"items": git.history(limit)}
 
 
 @feature(name="sync.conflicts", group="sync", http=("GET", "/api/v1/sync/conflicts"),

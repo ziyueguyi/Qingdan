@@ -15,7 +15,8 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private WebView web;
-    private final ExecutorService executor=Executors.newSingleThreadExecutor();
+    private final ExecutorService executor=Executors.newFixedThreadPool(4);
+    private final ExecutorService lifecycleExecutor=Executors.newSingleThreadExecutor();
     private ValueCallback<Uri[]> fileCallback;
     private static final String HOME="https://appassets.androidplatform.net/assets/web/index.html";
     @Override public void onCreate(Bundle state){
@@ -72,7 +73,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==7&&fileCallback!=null){fileCallback.onReceiveValue(result==RESULT_OK&&data!=null?new Uri[]{data.getData()}:null);fileCallback=null;}}
     private void handleBack(){web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}const m=document.getElementById('mask');if(m&&!m.hidden){const b=m.querySelector('[data-act=close-modal]');if(b)b.click();else m.hidden=true;return true;}const a=document.getElementById('app');if(a.classList.contains('phone-detail')){a.classList.remove('phone-detail');return true;}if(a.classList.contains('phone-nav')){a.classList.remove('phone-nav');return true;}return false;})()",handled->{if(!"true".equals(handled))finish();});}
     @Override public void onBackPressed(){handleBack();}
-    @Override protected void onResume(){super.onResume();if(!executor.isShutdown())executor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":true}"));}
-    @Override protected void onPause(){super.onPause();if(!executor.isShutdown())executor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":false}"));}
-    @Override protected void onDestroy(){if(fileCallback!=null)fileCallback.onReceiveValue(null);executor.shutdown();web.removeJavascriptInterface("QingdanAndroid");web.destroy();super.onDestroy();}
+    @Override protected void onResume(){super.onResume();if(!lifecycleExecutor.isShutdown())lifecycleExecutor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":true}"));}
+    @Override protected void onPause(){super.onPause();if(!lifecycleExecutor.isShutdown())lifecycleExecutor.execute(()->RuntimeBridge.invoke(getApplicationContext(),"host.foreground","{\"active\":false}"));}
+    @Override protected void onDestroy(){if(fileCallback!=null)fileCallback.onReceiveValue(null);executor.shutdown();lifecycleExecutor.shutdown();web.removeJavascriptInterface("QingdanAndroid");web.destroy();super.onDestroy();}
 }

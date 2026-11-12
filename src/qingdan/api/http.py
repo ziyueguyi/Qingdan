@@ -17,6 +17,7 @@ add_api_route）。当前接口清单由 `/api/v1/meta/features` 提供，契约
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 import sys
 import uuid
 import ipaddress
@@ -97,9 +98,17 @@ async def _run(f, request: Request) -> JSONResponse:
     raw.update(dict(request.path_params))
 
     try:
-        if request.app.state.remote_access:
-            request.state.api_principal = access.require_permission(request.state.api_principal, f.name, raw)
-        return _ok(call(f.name, **raw))
+        from starlette.concurrency import run_in_threadpool
+        from qingdan.core.context import ctx
+        def invoke():
+            # Parsing stays async, but synchronous Git/SQLite work must not block the event loop.
+            # Reauthorize after upload and after waiting for an ordinary mutation lock.
+            locked = request.app.state.remote_access and not f.manages_lock and f.group != 'access'
+            with ctx.need_store().operation_lock if locked else nullcontext():
+                if request.app.state.remote_access:
+                    request.state.api_principal = access.require_permission(request.state.api_principal, f.name, raw)
+                return call(f.name, **raw)
+        return _ok(await run_in_threadpool(invoke))
     except QdError as e:
         return _err(e.code, e.message, e.http_status, e.detail)
     except ValueError as e:

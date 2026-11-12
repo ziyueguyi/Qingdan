@@ -10,7 +10,7 @@ import java.util.HashSet;
 /** Translate the bridge's JSON envelope: a completed JNI call may still fail. */
 final class WorkerOutcome {
     private static final Set<String> ACTION_REQUIRED = new HashSet<>(Arrays.asList(
-        "AUTH_REQUIRED", "TOKEN_INVALID", "API_TOKEN_EXPIRED", "REPO_PUBLIC",
+        "AUTH_REQUIRED", "TOKEN_INVALID", "TOKEN_EXPIRED", "SCOPE_MISSING", "API_TOKEN_EXPIRED", "REPO_PUBLIC", "REPO_NOT_PRIVATE", "REPO_NOT_READY",
         "VALIDATION_ERROR", "CLOCK_SKEW", "clock_skew", "PLATFORM_UNSUPPORTED"));
 
     static ListenableWorker.Result fromResponse(String response) {
@@ -20,8 +20,8 @@ final class WorkerOutcome {
             if (!envelope.getBoolean("ok")) {
                 code = envelope.getJSONObject("error").getString("code");
             } else {
-                JSONObject data = envelope.optJSONObject("data");
-                if (data != null && data.has("ok") && !data.getBoolean("ok"))
+                JSONObject data = envelope.getJSONObject("data");
+                if (data.has("ok") && !data.getBoolean("ok"))
                     code = data.optString("error_code", "SYNC_FAILED");
             }
             if (code == null) return ListenableWorker.Result.success();

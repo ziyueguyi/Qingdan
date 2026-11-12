@@ -115,10 +115,11 @@ class BaseSnapshots:
 
 
 class SyncEngine:
-    def __init__(self, store: Store, git: GitRepo, on_anomaly=None):
+    def __init__(self, store: Store, git: GitRepo, on_anomaly=None, on_progress=None):
         self.store = store
         self.git = git
         self.on_anomaly = on_anomaly or (lambda msg: None)
+        self.on_progress = on_progress or (lambda phase: None)
         #: 本轮的基线快照。sync_once 开头会换成带 sha 的实例；不在 sync 流程里
         #: 直接调 `_merge`（单测、将来的自建 git）也能跑，只是不做字段还原。
         self._base_snap = BaseSnapshots()
@@ -148,19 +149,21 @@ class SyncEngine:
         比不清理更危险，因为它会让人以为已经安全了（今天就是这么翻车的：
         第一版只清了 .git/config，我据此宣布磁盘上没有令牌，直到扫 reflog 才发现还有）。
         """
-        try:
-            return self._sync_once(remote_url)
-        finally:
-            self.git.scrub_credentials_after_use()
+        with self.store.sync_lock:
+            try:
+                return self._sync_once(remote_url)
+            finally:
+                self.git.scrub_credentials_after_use()
 
     def _sync_once(self, remote_url: str | None = None) -> SyncReport:
-        mode = self.detect_mode()
-        report = SyncReport(mode=mode)
+        with self.store.operation_lock:
+            report = SyncReport(mode=self.detect_mode())
         url = remote_url or self.git.remote_url
         if not url:
             raise SyncAborted("未配置远端仓库")
 
         try:
+            self.on_progress('fetching')
             if not self.git.initialized:
                 self.git.clone(url)
             remote_head = self.git.fetch(url)
@@ -171,36 +174,34 @@ class SyncEngine:
 
         remote_files = self.git.read_tree(remote_head) if remote_head else {}
         remote_items = parse_tree(remote_files)
-        local_items = self.store.snapshot()
-        base_items = self.store.base_map()
-        # 基线 commit 必须在 _merge 之前取：本轮结束时会把它覆写成新的
-        self._base_snap = BaseSnapshots(self.git, self.store.state_get("base_commit"))
-
-        if mode == "bootstrap":
-            self._pull_only(remote_items, remote_head, report)
-            return report
-
-        self._merge(remote_items, local_items, base_items, report)
-
-        # 必须在 _push 之前处理：_merge 看到「远端没有 + 本地有更新的编辑」会判本地胜出，
-        # 于是把回收掉的已删项重新推回远端 —— 这就是 D1 的静默复活。
-        graveyard = compact.parse_graveyard(remote_files)
-        self._apply_graveyard(graveyard, base_items, report)
-
-        # B3/B4 保险丝：远端相对 base 消失且本地没有墓碑 → 绝不生成删除
-        for item_id, base in base_items.items():
-            if item_id in remote_items or item_id in graveyard:
-                continue                      # 名册里的缺失是「已确认删除」，不是协议外
-            if item_id in local_items and external_delete_detected(local_items[item_id], None, base):
-                report.anomalies.append(f"external_delete:{item_id}")
-                self.on_anomaly(f"远端 {item_id} 被手工删除（无墓碑），已保留本地版本")
+        self.on_progress('merging')
+        with self.store.operation_lock:
+            # Re-evaluate after the fetch: new local edits must not become bootstrap victims.
+            report.mode = self.detect_mode()
+            local_items = self.store.snapshot()
+            base_items = self.store.base_map()
+            self._base_snap = BaseSnapshots(self.git, self.store.state_get("base_commit"))
+            if report.mode == "bootstrap":
+                self._pull_only(remote_items, remote_head, report)
+                return report
+            self._merge(remote_items, local_items, base_items, report)
+            graveyard = compact.parse_graveyard(remote_files)
+            self._apply_graveyard(graveyard, base_items, report)
+            for item_id, base in base_items.items():
+                if item_id in remote_items or item_id in graveyard:
+                    continue
+                if item_id in local_items and external_delete_detected(local_items[item_id], None, base):
+                    report.anomalies.append(f"external_delete:{item_id}")
+                    self.on_anomaly(f"远端 {item_id} 被手工删除（无墓碑），已保留本地版本")
 
         report.pushed = self._push(local_items, base_items, remote_head, remote_items, report)
         # base_commit 记「本轮结束时本地分支的位置」：推送成功时它已经叠在
         # remote_head 之上，直接记 remote_head 会永远落后一个提交。
         head_after = self.git.head() or remote_head
-        self.store.state_set("base_commit", head_after.hex() if head_after else None)
-        report.base_commit = self.store.state_get("base_commit")
+        with self.store.operation_lock:
+            if report.ok:
+                self.store.state_set("base_commit", head_after.hex() if head_after else None)
+            report.base_commit = self.store.state_get("base_commit")
         return report
 
     # ------------------------------------------------------------------ 各阶段
@@ -253,12 +254,14 @@ class SyncEngine:
     def apply_remote_only(self, files: dict[str, bytes]) -> int:
         """只把远端内容落到本地，不推任何东西。返回落地条数。"""
         count = 0
-        for item in parse_tree(files).values():
-            local = self.store.get(item.id)
-            if local is not None and not same(item, local) and local.rev > item.rev:
-                continue                       # 本地更新，不被"只拉"覆盖
-            self._apply_remote(item)
-            count += 1
+        remote_items = parse_tree(files)
+        with self.store.operation_lock:
+            for item in remote_items.values():
+                local = self.store.get(item.id)
+                if local is not None and not same(item, local) and local.rev > item.rev:
+                    continue
+                self._apply_remote(item)
+                count += 1
         return count
 
     def _apply_remote(self, item: Item) -> None:
@@ -270,7 +273,8 @@ class SyncEngine:
     def _push(self, local_items, base_items, remote_head, remote_items,
               report: SyncReport) -> int:
         """把本地改动写成一次提交并推送；被拒就重新 fetch + 合并再来一轮（B7/B8）。"""
-        skew = abs(int(self.store.clock.offset_ms))
+        with self.store.operation_lock:
+            skew = abs(int(self.store.clock.offset_ms))
         if skew > SKEW_LIMIT_MS:
             # 宁可这轮不推。版本先后完全靠 ms，钟不准时"谁的更新"是假的 ——
             # 推上去会把对方真实的改动判成旧的，那种覆盖事后看不出来。
@@ -283,18 +287,21 @@ class SyncEngine:
 
         for attempt in range(1, MAX_PUSH_ATTEMPTS + 1):
             report.attempts = attempt
-            dirty = [it for it in self.store.list_items(include_deleted=True, dirty_only=True)]
+            with self.store.operation_lock:
+                dirty = self.store.list_items(include_deleted=True, dirty_only=True)
             if not dirty and attempt == 1:
                 # 没有本地改动也要把本地分支对齐到远端 head，否则工作区永远落后，
                 # 下一轮的 base_sha 就是过期的（实测导致两台机器 tree 不一致）。
                 current = self.git.head()
                 if remote_head is not None and current != remote_head:
                     self.git.reset_to(remote_head)
-                self._finalize_base(remote_items)
+                with self.store.operation_lock:
+                    self._finalize_base(remote_items)
                 return 0
 
             files = {it.path(): it.to_bytes() for it in dirty}
             try:
+                self.on_progress('pushing')
                 sha = self.git.commit_and_push(files, message=f"sync: {len(files)} items "
                                                              f"dev={self.store.device_id}",
                                                base_sha=remote_head)
@@ -306,16 +313,18 @@ class SyncEngine:
                     report.ok, report.error = False, str(e)
                     return 0
                 remote_items = parse_tree(self.git.read_tree(remote_head))
-                self._merge(remote_items, self.store.snapshot(), self.store.base_map(), report)
+                with self.store.operation_lock:
+                    self._merge(remote_items, self.store.snapshot(), self.store.base_map(), report)
                 continue
             except GitError as e:
                 report.ok, report.error = False, str(e)
                 return 0
 
-            self.store.set_base_many([(it.id, it.rev, it.deleted) for it in dirty])
-            report.pushed = len(files)
-            self._finalize_base(remote_items)
-            self.store.state_set("last_sync_at", int(time.time() * 1000))
+            with self.store.operation_lock:
+                self.store.set_base_many([(it.id, it.rev, it.deleted) for it in dirty])
+                report.pushed = len(files)
+                self._finalize_base(remote_items)
+                self.store.state_set("last_sync_at", int(time.time() * 1000))
             _ = sha
             return report.pushed
 
