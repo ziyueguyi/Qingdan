@@ -161,7 +161,7 @@ jobs:
           profile: pixel_6
           ram-size: 4096M
           disable-animations: true
-          script: cd android && gradle connectedEmulatorDebugAndroidTest --stacktrace
+          script: bash scripts/verify_android.sh
       - name: Package Android download
         run: |
           mkdir -p android-download

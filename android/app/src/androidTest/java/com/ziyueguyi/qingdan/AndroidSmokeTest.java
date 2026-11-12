@@ -70,7 +70,11 @@ public class AndroidSmokeTest {
             for(int i=0;i<30;i++){if("true".equals(js(scenario,"document.body.innerText.includes('Android smoke task')"))){visible=true;break;}Thread.sleep(300);}
             assertTrue("Android bridge did not render saved task: "+js(scenario,"document.body.innerText.slice(-2500)"),visible);
             assertEquals("true",js(scenario,"document.documentElement.dataset.platform==='android'"));
-            assertEquals("true",js(scenario,"document.querySelector('.main').getBoundingClientRect().width<=innerWidth"));
+            android.graphics.Bitmap screenshot=InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();
+            if(screenshot!=null)try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(context().getExternalFilesDir(null),"android-ui.png"))){screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}
+            // Pixel 6 has a fractional CSS viewport; innerWidth is rounded to an integer.
+            String metrics=js(scenario,"JSON.stringify({main:document.querySelector('.main').getBoundingClientRect().toJSON(),viewport:visualViewport.width,scroll:document.documentElement.scrollWidth})");
+            assertEquals("Layout overflow: "+metrics,"true",js(scenario,"document.querySelector('.main').getBoundingClientRect().right<=visualViewport.width+1&&document.documentElement.scrollWidth<=Math.ceil(visualViewport.width)+1"));
         }
     }
     private String js(ActivityScenario<MainActivity> scenario,String script) throws Exception {
