@@ -50,7 +50,7 @@ public class AndroidSmokeTest {
                 b.commit_and_push({'items/task/smoke.json': b'{"title":"updated","deleted":true}'})
                 head = a.fetch()
                 assert b'"deleted":true' in a.read_tree(head)['items/task/smoke.json']
-            """);
+            """, com.chaquo.python.Python.getInstance().getModule("builtins").callAttr("dict"));
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
             // A navigation can discard evaluateJavascript callbacks from the blank page.
             AtomicReference<Boolean> loaded=new AtomicReference<>(false);
