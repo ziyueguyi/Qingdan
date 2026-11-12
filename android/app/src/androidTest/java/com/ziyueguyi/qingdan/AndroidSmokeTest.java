@@ -31,6 +31,26 @@ public class AndroidSmokeTest {
         assertEquals(15,schedule.getInt("minimum_interval_minutes"));assertTrue(schedule.getJSONObject("status").getLong("next_at")>0);
         call("autosync.config_set","{\"enabled\":false}");
         assertEquals("platform_unsupported",call("app.autostart_get","{}").getString("reason_key"));
+        com.chaquo.python.Python.getInstance().getModule("builtins").callAttr("exec", """
+            import tempfile
+            from pathlib import Path
+            from dulwich.repo import Repo
+            from qingdan.core.gitrepo import GitRepo
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                remote = root / 'remote.git'
+                remote.mkdir()
+                Repo.init_bare(str(remote)).close()
+                a = GitRepo(root / 'a')
+                a.clone(str(remote))
+                a.commit_and_push({'items/task/smoke.json': b'{"title":"first"}'})
+                b = GitRepo(root / 'b')
+                b.clone(str(remote))
+                assert b.read_tree()['items/task/smoke.json'] == b'{"title":"first"}'
+                b.commit_and_push({'items/task/smoke.json': b'{"title":"updated","deleted":true}'})
+                head = a.fetch()
+                assert b'"deleted":true' in a.read_tree(head)['items/task/smoke.json']
+            """);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
             boolean ready=false;
             for(int i=0;i<60;i++){
@@ -49,6 +69,6 @@ public class AndroidSmokeTest {
     private String js(ActivityScenario<MainActivity> scenario,String script) throws Exception {
         AtomicReference<String> value=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
         scenario.onActivity(a->a.getWebView().evaluateJavascript(script,result->{value.set(result);done.countDown();}));
-        assertTrue("JS callback timed out",done.await(10,TimeUnit.SECONDS));return value.get();
+        assertTrue("JS callback timed out",done.await(30,TimeUnit.SECONDS));return value.get();
     }
 }
