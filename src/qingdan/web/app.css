@@ -556,3 +556,6 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
   .settings-content .api-token-row{flex-wrap:wrap}
   .settings-content .api-token-name{flex-basis:100%}
 }
+.calendar-more{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text-3);cursor:pointer}
+.calendar-day-events{max-height:55dvh;overflow-y:auto;overscroll-behavior:contain;margin-top:12px}
+.calendar-day-event{display:block;width:100%;text-align:left;margin-bottom:6px;white-space:normal;overflow-wrap:anywhere}

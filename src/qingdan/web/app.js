@@ -8,6 +8,7 @@ import { catalogs, catalogItems, subscribeCatalog, scrollCatalog, PAGE_SIZE, ROW
 import { configureAccessUI, loadAccess, renderAccessTab, renderCliTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
 import { call, ApiError, hasFeature, loadFeatures, featureCount } from "./api.js";
 import { t, setLang, locale } from "./i18n.js";
+import { TaskPager } from "./task_pages.js";
 import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError, changeTaskPage, changeBoardPage } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -350,14 +351,14 @@ function renderCalendar() {
       data-act="cal-day" data-date="${esc(c.date)}"><b>${esc(c.date.slice(-2))}</b>` +
     c.events.slice(0, 3).map((e) => `<div class="ev ${e.occurrence ? "rec" : ""}" style="--ec:${esc(e.color || PC[e.priority] || "var(--accent)")}"
         data-act="${e.kind === "countdown" ? "open-countdown" : "open"}" data-id="${esc(e.id)}">${e.occurrence ? "↻ " : ""}${esc(e.title)}</div>`).join("") +
-    (c.events.length > 3 ? `<div class="ev" style="--ec:var(--text-3)">+${c.events.length - 3}</div>` : "") +
+    (c.count > c.events.length ? `<button class="ev calendar-more" data-act="cal-events" data-date="${esc(c.date)}" title="${esc(t('calendar_events'))}">+${c.count-c.events.length}</button>` : "") +
     "</div>").join("");
   return `<div style="display:flex;align-items:center;gap:10px;padding-top:12px">
       <button class="iconbtn" data-act="cal-month" data-v="-1" title="${esc(t("cal_prev"))}">‹</button>
       <b>${esc(new Intl.DateTimeFormat(locale(), {year:"numeric",month:"long"}).format(new Date(cal.month + "T12:00:00")))}</b>
       <button class="iconbtn" data-act="cal-month" data-v="1" title="${esc(t("cal_next"))}">›</button>
       <button class="btn" data-act="cal-today">${esc(t("today"))}</button></div>
-      <div class="cal">${wd.map((w) => `<div class="hd">${esc(w)}</div>`).join("")}${cells}</div>`;
+      ${(cal.warnings||[]).map(w=>`<p role="status">${esc(t(w.key,w))}</p>`).join('')}<div class="cal">${wd.map((w) => `<div class="hd">${esc(w)}</div>`).join("")}${cells}</div>`;
 }
 
 function renderStatusbar() {
@@ -372,7 +373,7 @@ function renderStatusbar() {
     `<span class="st-l">${esc(t(key))}</span><b>${value}</b></span>`;
   const modeKey = authed ? "sync_on" : "sync_off";
   $("statusbar").innerHTML = `
-    ${item("▤", "status_items", h.items ?? "-")}
+    ${item("▤", "status_items", h.tasks ?? "-")}
     ${item("⚠", "status_overdue", s.overdue ?? "-", (s.overdue ?? 0) > 0 ? "bad" : "")}
     ${item("📅", "today", s.due_today ?? "-")}
     ${item("☑", "status_done", s.done_today ?? "-")}
@@ -545,9 +546,50 @@ function snackbar(text, undoFeature) {
 function openModal(html, fixed = false) {
   $('modal').classList.remove('settings-modal');
   const m = $("modal");
+  delete m.dataset.calendarDay;
   m.innerHTML = html;
   m.classList.toggle("fixed", fixed);
   $("mask").hidden = false;
+}
+
+let calendarDay = null;
+async function openCalendarDay(date, offset = 0) {
+  const modal = $('modal');
+  if (!calendarDay || $('mask').hidden || calendarDay.date !== date || modal.dataset.calendarDay !== calendarDay.key) {
+    const query = {...state.calendar.query,start:date,days:1};
+    delete query.limit;
+    calendarDay = {date,query,pager:new TaskPager(call),key:String(Date.now())+'-'+Math.random(),sequence:0};
+    openModal(`<div class="mh">${esc(date)}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb" role="status">${esc(t('task_page_loading'))}</div>`);
+    modal.dataset.calendarDay = calendarDay.key;
+  }
+  const context = calendarDay;
+  if (context.loading) return;
+  context.loading = true;
+  const sequence = ++context.sequence;
+  const active = () => calendarDay === context && context.sequence === sequence && !$('mask').hidden && modal.dataset.calendarDay === context.key;
+  modal.querySelectorAll('[data-act="cal-page"]').forEach(button=>button.disabled=true);
+  try {
+    let page;
+    for (let attempt=0;attempt<3;attempt++) {
+      const health = await call('app.health');
+      if (!active()) return;
+      const changed = context.pager.configure('view.calendar',{...context.query,today:health.today},health.task_token);
+      if (changed) offset = 0;
+      try { page = await context.pager.get(offset); break; }
+      catch(error) { if (error.code !== 'PAGE_CHANGED' || attempt === 2) throw error; }
+    }
+    if (!active()) return;
+    context.offset = page.offset;
+    context.page = page;
+    modal.innerHTML = `<div class="mh">${esc(date)}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb"><button class="btn" data-act="cal-day" data-date="${esc(date)}">+ ${esc(t('new_task'))}</button>${(page.warnings||[]).map(w=>`<p role="status">${esc(t(w.key,w))}</p>`).join('')}<nav class="task-pager"><button class="btn" data-act="cal-page" data-v="-1" ${!page.offset?'disabled':''}>${esc(t('previous_page'))}</button><span>${esc(t('board_card_range',{start:page.total?page.offset+1:0,end:page.offset+page.items.length,total:page.total}))}</span><button class="btn" data-act="cal-page" data-v="1" ${!page.has_more?'disabled':''}>${esc(t('next_page'))}</button></nav><div class="calendar-day-events">${page.items.map(event=>`<button class="btn calendar-day-event" data-act="cal-event-open" data-id="${esc(event.id)}" data-kind="${esc(event.kind)}">${event.occurrence?'↻ ':''}${esc(event.title)}</button>`).join('')||`<p>${esc(t('empty_list'))}</p>`}</div></div>`;
+    context.pager.warm(offset,page);
+  } catch(error) {
+    if (active()) {
+      showError(error);
+      modal.querySelectorAll('[data-act="cal-page"]').forEach(button=>button.disabled=false);
+      if (!context.page) modal.querySelector('.mb').innerHTML = `<button class="btn" data-act="cal-events" data-date="${esc(date)}">${esc(t('calendar_events'))}</button>`;
+    }
+  } finally { context.loading = false; }
 }
 
 
@@ -1355,6 +1397,13 @@ async function onClick(ev) {
       break;
     }
     case "cal-today": patch({ calendarMonth: null }); await loadAll(); break;
+    case "cal-events": await openCalendarDay(date); break;
+    case "cal-page": await openCalendarDay(calendarDay.date,calendarDay.offset+Number(v)*50); break;
+    case "cal-event-open":
+      $('mask').hidden = true;
+      if (el.dataset.kind === 'countdown') await openCountdownDialog(id);
+      else { if(globalThis.QingdanAndroid)$('app').classList.add('phone-detail'); await select(id); }
+      break;
     case "cal-day": {
       await openTaskDialog(null, { due_at: defaultDueText(new Date(), date), due_all_day: false });
       break;
@@ -1604,13 +1653,15 @@ async function openTaskDialog(id, defaults = {}) {
     $("tk-repeat").dataset.previous = $("tk-repeat").value;
   };
   setTaskAllDay(allDayChecked);
+  const taskTitleInput = $('tk-title'), priorityButtons = $('tk-prio');
   await mountGroupPicker("tk-list-picker", "tk-list", d.list_id || "");
+  if (!taskTitleInput.isConnected || $('tk-title') !== taskTitleInput) return;
   // 优先级是一组互斥按钮：点谁谁亮，取值时读 .on
-  $("tk-prio").querySelectorAll("[data-prio]").forEach((b) => {
-    b.onclick = () => $("tk-prio").querySelectorAll("[data-prio]")
+  priorityButtons.querySelectorAll("[data-prio]").forEach((b) => {
+    b.onclick = () => priorityButtons.querySelectorAll("[data-prio]")
       .forEach((x) => x.classList.toggle("on", x === b));
   });
-  setTimeout(() => $("tk-title")?.focus(), 0);
+  setTimeout(() => { if(taskTitleInput.isConnected) taskTitleInput.focus(); }, 0);
 }
 
 async function mountGroupPicker(containerId, selectId, initial) {
@@ -1942,6 +1993,10 @@ async function boot() {
   });
   document.addEventListener("scroll", ev => {
     const el = ev.target;
+    if (el.matches?.('.calendar-day-events')) {
+      if (calendarDay?.page?.has_more && !calendarDay.loading && el.scrollTop>0 && el.scrollHeight-el.clientHeight-el.scrollTop<=4) openCalendarDay(calendarDay.date,calendarDay.offset+50).catch(showError);
+      return;
+    }
     if (el.id === "scroll") {
       const editing = document.activeElement?.matches("input,textarea,select,[contenteditable=true]") || $("quickadd")?.value.trim();
       if (state.taskPage && !editing && el.scrollTop > 0 && el.scrollHeight-el.clientHeight-el.scrollTop <= 4) changeTaskPage(1).catch(showError);

@@ -198,7 +198,13 @@ export async function loadAll(opts = {}) {
     const first = new Date(month);
     first.setDate(1 - (first.getDay() + 6) % 7);
     const dateText = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    calendar = await call("view.calendar", { start: dateText(first), days: 42, list_id: state.view.startsWith("group:") ? state.view.slice(6) : null });
+    const scope = selectedTaskScope();
+    // Smart day/week navigation still shows the whole browsed month.
+    if (scope.name !== 'done' && scope.name !== 'trash') scope.name = 'all';
+    delete scope.include_done;
+    const query = {...scope,start:dateText(first),days:42,today:health.today,limit:3};
+    calendar = await call("view.calendar", query);
+    calendar.query = query;
     calendar.month = dateText(month);
     calendar.cells.forEach(c => { c.in_month = c.date.slice(0,7) === calendar.month.slice(0,7); });
     tasks = [];

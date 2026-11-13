@@ -310,13 +310,14 @@ def test_calendar_does_not_expand_done_or_past():
     assert all(c["recurring"] == 0 for c in cells2.values())
 
 
-def test_calendar_expansion_is_capped():
-    """畸形/密集规则不许把响应撑爆。"""
+def test_calendar_expansion_counts_all_and_bounds_each_cell():
+    """密集规则完整计数，按格分页而非总量截断。"""
     for i in range(30):
         _task(title=f"每日{i}", due_at="2026-11-09", repeat="daily")
-    cells = call("view.calendar", start="2026-11-09", days=370, today="2026-11-09")["cells"]
+    cells = call("view.calendar", start="2026-11-09", days=370, today="2026-11-09", limit=3)["cells"]
     total = sum(c["recurring"] for c in cells)
-    assert 0 < total <= 400
+    assert total == 30*369
+    assert all(len(c['events'])==3 and c['count']==30 for c in cells)
 
 
 # --------------------------------------------------------------------------- HTTP 路由

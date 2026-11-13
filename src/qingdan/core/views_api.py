@@ -50,18 +50,14 @@ def view_board(group_by: str = "status", list_id: str | None = None,
 
 @feature(name="view.calendar", group="view", http=("GET", "/api/v1/calendar"), idempotent=True)
 def view_calendar(start: str | None = None, days: int = 42, today: str | None = None,
-                  include_countdown: bool = True, list_id: str | None = None) -> dict:
+                  include_countdown: bool = True, list_id: str | None = None,
+                  limit: int = 0, offset: int = 0, tag: str | None = None,
+                  filter_id: str | None = None, name: str = 'all') -> dict:
+    from qingdan.core.calendar_query import query
     d = _today_or(today)
     frm = _today_or(start) if start else d.replace(day=1)
-    if not 1 <= int(days) <= 370:
-        raise validation_error("days 需在 1..370", got=days)
-    items = [it for it in ctx.need_store().list_items() if view.is_alive(it)]
-    if list_id:
-        items = [it for it in items if it.data.get("list_id") == list_id]
-    if not include_countdown:
-        items = [it for it in items if it.kind != "countdown"]
-    return {"start": frm.isoformat(), "days": int(days), "today": d.isoformat(),
-            "cells": view.calendar_days(items, frm, int(days), d)}
+    return query(ctx.need_store(),frm,int(days),d,include_countdown,list_id,
+                 limit,offset,tag,filter_id,name)
 
 
 # --------------------------------------------------------------------------- 视图偏好（本地，不同步）

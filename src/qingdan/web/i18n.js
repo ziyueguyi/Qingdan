@@ -7,6 +7,7 @@
 
 const DICT = {
   zh: {
+    calendar_events: '查看当日全部任务',
     sync_phase_idle: '暂无同步任务', sync_phase_preparing: '正在检查同步配置', sync_phase_fetching: '正在拉取远端数据',
     sync_result_counts: '拉取 {pulled} · 推送 {pushed} · 冲突 {conflicts}',
     sync_phase_merging: '正在合并数据', sync_phase_pushing: '正在推送本地改动', sync_phase_completed: '同步完成',
@@ -277,6 +278,7 @@ const DICT = {
     data_dir: "数据目录",
   },
   en: {
+    calendar_events: 'View all events on this day',
     sync_phase_idle: 'No sync running', sync_phase_preparing: 'Checking sync configuration', sync_phase_fetching: 'Fetching remote data',
     sync_result_counts: 'Pulled {pulled} · pushed {pushed} · conflicts {conflicts}',
     sync_phase_merging: 'Merging data', sync_phase_pushing: 'Pushing local changes', sync_phase_completed: 'Sync completed',
