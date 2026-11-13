@@ -130,9 +130,11 @@ def select(store, where, args, sort='smart', reverse=False, limit=0, offset=0, o
     limit, offset = paging(limit, offset)
     db = connection(store)
     predicate = ' AND '.join(f'({clause})' for clause in where)
-    total = db.execute(f'SELECT COUNT(*) FROM item i WHERE {predicate}', args).fetchone()[0]
-    rows = db.execute(f'SELECT i.* FROM item i WHERE {predicate} ORDER BY {order or order_by(sort, reverse)} LIMIT ? OFFSET ?',
-                      [*args, limit or -1, offset])
-    items = [store._row_to_item(row) for row in rows]
-    return items, {'total': total, 'limit': limit, 'offset': offset,
-                   'has_more': offset + len(items) < total, 'change_token': store.change_token()}
+    with store.read_snapshot():
+        total = db.execute(f'SELECT COUNT(*) FROM item i WHERE {predicate}', args).fetchone()[0]
+        rows = db.execute(f'SELECT i.* FROM item i WHERE {predicate} ORDER BY {order or order_by(sort, reverse)} LIMIT ? OFFSET ?',
+                          [*args, limit or -1, offset])
+        items = [store._row_to_item(row) for row in rows]
+        token = store.task_change_token()
+        return items, {'total': total, 'limit': limit, 'offset': offset,
+                       'has_more': offset + len(items) < total, 'change_token': token}

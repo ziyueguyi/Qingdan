@@ -316,14 +316,15 @@ def filter_delete(item_id: str) -> dict:
 def filter_tasks(item_id: str, today: str | None = None, sort: str = "smart",
                  group: str = "none", reverse: bool = False, limit: int = 0, offset: int = 0) -> dict:
     """返回形状与 view.query 一致（items + groups），前端的分组渲染才能复用同一段代码。"""
-    it = _need_kind(item_id, "filter", "过滤器")
-    d = view.as_date(today) if today else view.as_date(stamp.now_day())
-    where, args = task_query.criteria_where(it.data.get("criteria") or {}, d)
-    ordered, page = task_query.select(ctx.need_store(), where, args, sort, reverse, limit, offset)
-    names = ctx.need_store().list_names(task.data.get("list_id") for task in ordered)
-    buckets = view.group_items(ordered, group, d, names)
-    return {"filter": it.data.get("name"), **page, "list_names": names,
-            "groups": [{"key": b["key"], "label_key": b["label_key"], "label": b["label"],
-                        "total": len(b["items"]),
-                        "items": [x.to_dict() for x in b["items"]]} for b in buckets],
-            "items": [x.to_dict() for x in ordered]}
+    with ctx.need_store().read_snapshot():
+        it = _need_kind(item_id, "filter", "过滤器")
+        d = view.as_date(today) if today else view.as_date(stamp.now_day())
+        where, args = task_query.criteria_where(it.data.get("criteria") or {}, d)
+        ordered, page = task_query.select(ctx.need_store(), where, args, sort, reverse, limit, offset)
+        names = ctx.need_store().list_names(task.data.get("list_id") for task in ordered)
+        buckets = view.group_items(ordered, group, d, names)
+        return {"filter": it.data.get("name"), **page, "list_names": names,
+                "groups": [{"key": b["key"], "label_key": b["label_key"], "label": b["label"],
+                            "total": len(b["items"]),
+                            "items": [x.to_dict() for x in b["items"]]} for b in buckets],
+                "items": [x.to_dict() for x in ordered]}

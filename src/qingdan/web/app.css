@@ -426,6 +426,9 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
 .field .compact-repeat{flex:0 0 auto;width:calc(3em + 28px);min-width:0;padding-left:6px;padding-right:4px}
 .rule-dialog{margin:auto;padding:0;width:430px;max-width:calc(100vw - 32px);max-height:80vh;overflow:auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 .rule-dialog::backdrop{background:rgba(0,0,0,.25)}
+.task-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0;color:var(--text-3);font-size:12px}
+.task-pager>span{text-align:center;overflow-wrap:anywhere}
+.task-pager>.btn{flex-shrink:0}
 .rule-dialog .field>label{width:100px}
 .rule-dialog .ctl{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:6px;border-radius:var(--radius-s)}
 #rule-raw{width:100%;box-sizing:border-box;resize:vertical}

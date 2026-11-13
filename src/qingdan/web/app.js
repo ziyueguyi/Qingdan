@@ -8,7 +8,7 @@ import { catalogs, catalogItems, subscribeCatalog, scrollCatalog, PAGE_SIZE, ROW
 import { configureAccessUI, loadAccess, renderAccessTab, renderCliTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
 import { call, ApiError, hasFeature, loadFeatures, featureCount } from "./api.js";
 import { t, setLang, locale } from "./i18n.js";
-import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError } from "./store.js";
+import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError, changeTaskPage } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -239,6 +239,9 @@ function emptyKey() {
 
 function renderMain() {
   const el = $("scroll");
+  const oldQuick = $("quickadd"), draft = oldQuick?.value, draftDue = oldQuick?.dataset.due;
+  const focused = oldQuick && document.activeElement === oldQuick;
+  const selection = focused ? [oldQuick.selectionStart, oldQuick.selectionEnd] : null;
   if (!state.booted) { el.innerHTML = `<div class="loading">${esc(t("booting"))}</div>`; return; }
   if (state.layout === "board") { el.innerHTML = renderBoard(); return; }
   if (state.layout === "calendar") { el.innerHTML = renderCalendar(); return; }
@@ -249,18 +252,50 @@ function renderMain() {
   if (state.searchQ) html += `<div class="sec-h">${esc(t("search_results", { q: state.searchQ }))}
                               <button class="btn" data-act="clear-search">${esc(t("back_to_view"))}</button><span class="line"></span></div>`;
 
-  if (state.layout === "list" && state.group !== "none") {
+  html += renderTaskPager();
+  if (state.layout === "list" && state.group !== "none" && state.buckets.length) {
     for (const b of state.buckets) {
       html += `<div class="sec-h ${b.key === "sec_overdue" ? "late" : ""}">${esc(bucketLabel(b))}<span class="line"></span></div>` +
         b.items.map(taskRow).join("");
     }
   } else {
-    html += state.tasks.map(taskRow).join("");
+    html += state.tasks.map(state.searchQ ? searchRow : taskRow).join("");
   }
   if (!state.tasks.length) {
     html += `<div class="empty">${esc(t(emptyKey()))}</div>`;
   }
+  html += renderTaskPager();
   el.innerHTML = html;
+  const quick = $("quickadd");
+  if (quick && draft !== undefined) {
+    quick.value = draft; quick.dataset.due = draftDue || "";
+    if (focused) { quick.focus({preventScroll:true}); quick.setSelectionRange(...selection); }
+  }
+}
+
+function searchRow(item) {
+  if (item.kind === "task") return taskRow(item);
+  const d = item.data;
+  const kinds = {list:"kind_list",tag:"kind_tag",filter:"kind_filter",folder:"kind_folder",section:"kind_section",note:"kind_note",countdown:"kind_countdown"};
+  const destination = item.kind === "list" ? "group:" + item.id
+    : item.kind === "tag" ? "tag:" + d.name
+    : item.kind === "filter" ? "filter:" + item.id
+    : item.kind === "section" && d.list_id ? "group:" + d.list_id : null;
+  const action = destination ? `data-act="view" data-view="${esc(destination)}"`
+    : item.kind === "countdown" ? `data-act="open-countdown" data-id="${esc(item.id)}"`
+    : item.kind === "note" && d.parent_id ? `data-act="open" data-id="${esc(d.parent_id)}"` : "";
+  return `<div class="task search-result" ${action}><div class="body"><div class="ttl">${esc(d.name || d.title || d.text || item.id)}</div><div class="meta">${esc(kinds[item.kind] ? t(kinds[item.kind]) : item.kind)}</div></div></div>`;
+}
+
+function renderTaskPager() {
+  const page = state.taskPage;
+  if (!page) return "";
+  const disabled = page.loading || state.busy;
+  return `<nav class="task-pager" aria-label="${esc(t("task_pages"))}">
+    <button class="btn" data-act="task-page" data-v="-1" ${disabled || !page.offset ? "disabled" : ""}>${esc(t("previous_page"))}</button>
+    <span role="status">${esc(page.loading ? t("task_page_loading") : t("task_page_range", {start:page.total ? page.offset+1 : 0,end:Math.min(page.offset+state.tasks.length,page.total),total:page.total,page:page.total ? Math.floor(page.offset/page.limit)+1 : 0,pages:Math.ceil(page.total/page.limit)}))}</span>
+    <button class="btn" data-act="task-page" data-v="1" ${disabled || !page.has_more ? "disabled" : ""}>${esc(t("next_page"))}</button>
+  </nav>`;
 }
 
 function renderCountdownBanner() {
@@ -1132,6 +1167,7 @@ async function onClick(ev) {
       await saveViewPrefs(); await loadAll();
       break;
     case "clear-search": patch({ searchQ: "" }); $("q").value = ""; await loadAll(); break;
+    case "task-page": await changeTaskPage(Number(v)); break;
     case "layout":
       patch({ layout: v }); await saveViewPrefs(); await loadAll(); break;
     case "reverse":
@@ -1436,7 +1472,8 @@ async function onKeydown(ev) {
     if (!text) return;
     const due = ev.target.dataset.due;
     await addQuickAdd(due ? `${due} ${text}` : text);
-    ev.target.value = ""; ev.target.dataset.due = "";
+    const quick = $("quickadd");
+    if (quick && quick.value.trim() === text) { quick.value = ""; quick.dataset.due = ""; }
     const p = $("qa-preview"); if (p) p.innerHTML = "";
     return;
   }
@@ -1845,7 +1882,7 @@ async function countdownSave(id) {
 
 let externalRefreshBusy = false;
 function canRefreshExternal() {
-  if (!state.booted || state.busy || document.hidden || !$("mask").hidden || $("rule-dialog")?.open) return false;
+  if (!state.booted || state.busy || state.taskPage?.loading || document.hidden || !$("mask").hidden || $("rule-dialog")?.open) return false;
   if (document.activeElement?.matches("input,textarea,select,[contenteditable=true]")) return false;
   if (["quickadd", "noteadd"].some(id => $(id)?.value.trim())) return false;
   if (state.detail && (("title" in state.detail.data && $("title") && $("title").value.trim() !== state.detail.data.title)
@@ -1857,7 +1894,7 @@ async function refreshExternalChanges() {
   externalRefreshBusy = true;
   try {
     const health = await call("app.health");
-    if (JSON.stringify(health.change_token) === JSON.stringify(state.health?.change_token)) return;
+    if (JSON.stringify(health.change_token) === JSON.stringify(state.health?.change_token) && health.today === state.health?.today) return;
     const [ap, vp] = await Promise.all([call("app.pref_get"), call("view.pref_get")]);
     if (!canRefreshExternal()) return;
     const prefs = { ...vp.prefs, ...ap.prefs };
@@ -1881,6 +1918,11 @@ async function boot() {
   });
   document.addEventListener("scroll", ev => {
     const el = ev.target;
+    if (el.id === "scroll") {
+      const editing = document.activeElement?.matches("input,textarea,select,[contenteditable=true]") || $("quickadd")?.value.trim();
+      if (state.layout === "list" && !editing && el.scrollTop > 0 && el.scrollHeight-el.clientHeight-el.scrollTop <= 4) changeTaskPage(1).catch(showError);
+      return;
+    }
     if (!el.matches?.(".catalog-scroll")) return;
     const c = catalogs[el.dataset.catalog];
     c.scrollTop = el.scrollTop;
@@ -1888,7 +1930,7 @@ async function boot() {
   }, true);
   // 任务行右键菜单。非任务区域的右键保持浏览器默认（开发者要能检查元素）。
   document.addEventListener("contextmenu", (ev) => {
-    const row = ev.target.closest('.task, .ev[data-act="open"]');
+    const row = ev.target.closest('.task:not(.search-result), .ev[data-act="open"]');
     if (!row) { closeTaskMenu(); return; }
     ev.preventDefault();
     openTaskMenu(ev.clientX, ev.clientY, row.dataset.id);

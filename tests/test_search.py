@@ -53,7 +53,10 @@ def test_search_empty_query_rejected():
 def test_search_respects_limit():
     for i in range(12):
         call("task.create", title=f"填充任务{i} 立案")
-    assert call("search.query", q="立案", limit=5)["total"] == 5
+    result = call("search.query", q="立案", limit=5)
+    assert len(result["items"]) == 5
+    assert result["total"] == 12  # Complete matching count, independent of page size.
+    assert result["has_more"] is True
 
 
 def test_search_returns_full_item_shape():

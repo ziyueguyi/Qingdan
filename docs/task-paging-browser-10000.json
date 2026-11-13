@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-13",
+  "method": "Chrome DevTools DOM/API observations in an isolated HTTP review database",
+  "seeded_tasks": 10000,
+  "page_size": 50,
+  "initial": {"total": 10000, "dom_rows": 50, "queried_offsets": [0, 50]},
+  "desktop_flips": [
+    {"offset": 50, "ms": 26, "rows": 50, "first": "T00000050", "last": "T00000099"},
+    {"offset": 100, "ms": 36.1, "rows": 50, "first": "T00000100", "last": "T00000149"},
+    {"offset": 150, "ms": 32, "rows": 50, "first": "T00000150", "last": "T00000199"},
+    {"offset": 200, "ms": 35.2, "rows": 50, "first": "T00000200", "last": "T00000249"},
+    {"offset": 250, "ms": 31.6, "rows": 50, "first": "T00000250", "last": "T00000299"}
+  ],
+  "scroll_to_next_page": {"offset": 100, "dom_rows": 50, "scroll_top_after": 0},
+  "external_edit": {"token_before": 0, "token_after": 1, "offset_after_probe": 0, "updated_title_visible": true},
+  "quick_add_draft": {"preserved_on_manual_flip": true, "auto_flip_suppressed_with_draft": true, "auto_flip_resumed_after_clear": true},
+  "search": {"matches": 99, "first_page_rows": 50, "last_page_rows": 49},
+  "custom_filter": {"matches": 100, "first_page_rows": 50, "second_page_rows": 50, "grouped_by": "date"},
+  "mixed_search": {"matches": 4, "kinds": ["filter", "list", "note", "tag"], "correct_names_and_targets": true, "task_checkboxes": 0, "task_context_menu_not_opened": true},
+  "empty_list_from_search": {"matches": 0, "dom_rows": 0, "navigation_succeeded": true},
+  "android_styles_browser_preview": {
+    "native_bridge": false,
+    "viewport_width": 390,
+    "document_scroll_width": 390,
+    "main_client_width": 381,
+    "main_scroll_width": 381,
+    "dom_rows": 50,
+    "total": 10000,
+    "screenshot": "Page.captureScreenshot timed out; no mobile screenshot claimed"
+  },
+  "limitations": [
+    "Browser observations are not physical Android device or native WebView performance evidence.",
+    "Board and calendar dense-task pagination are still pending.",
+    "UI timing observations are local samples, not CI performance thresholds."
+  ]
+}

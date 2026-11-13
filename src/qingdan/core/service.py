@@ -205,18 +205,21 @@ def _smart_key(it: Item) -> tuple:
 def health() -> dict:
     """存活探针 + 侧栏徽标计数。不需要登录，供外部脚本与冒烟测试使用。"""
     st = ctx.need_store()
-    return {
-        "ok": True,
-        "version": __version__,
-        "device_id": st.device_id,
-        **st.health_counts(),
-        "change_token": st.change_token(),
-        "authed": ctx.authed,
-        "data_dir": str(ctx.data_dir),
-        # 数据到底读自哪里、为什么在那里：出问题时第一句要能回答这个
-        "data_dir_source": ctx.data_dir_source,
-        "app_dir": str(context_app_dir()),
-    }
+    with st.read_snapshot():
+        return {
+            "ok": True,
+            "version": __version__,
+            "device_id": st.device_id,
+            **st.health_counts(),
+            "change_token": st.change_token(),
+            "task_token": st.task_change_token(),
+            "today": stamp.now_day(),
+            "authed": ctx.authed,
+            "data_dir": str(ctx.data_dir),
+            # 数据到底读自哪里、为什么在那里：出问题时第一句要能回答这个
+            "data_dir_source": ctx.data_dir_source,
+            "app_dir": str(context_app_dir()),
+        }
 
 
 @feature(name="app.info", group="app", http=("GET", "/api/v1/app/info"), idempotent=True)

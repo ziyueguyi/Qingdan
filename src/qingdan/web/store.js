@@ -8,6 +8,11 @@
  */
 import { call, ApiError } from "./api.js";
 import { refreshCatalogs, catalogItems } from "./catalog.js";
+import { TaskPager, TASK_PAGE_SIZE } from "./task_pages.js";
+import { t } from "./i18n.js";
+
+const taskPager = new TaskPager(call);
+const taskQueryKey = () => JSON.stringify([state.view,state.layout,state.searchQ,state.group,state.sort,state.reverse]);
 
 export const state = {
   booted: false,
@@ -27,6 +32,7 @@ export const state = {
   searchQ: "",
 
   tasks: [],
+  taskPage: null,
   groups: [],
   groupNames: {},
   tags: [],
@@ -87,7 +93,8 @@ export async function loadAll(opts = {}) {
   const ok = fresh();
   const list = (r) => r.items || [];          // 后端集合类接口统一返回 {total, items}
   if (state.view === 'all') state.view = 'inbox';
-  const [health, , folders, countdowns, counts] = await Promise.all([
+  const query = taskQueryKey();
+  let [health, , folders, countdowns, counts] = await Promise.all([
     call("app.health"),
     refreshCatalogs(),
     call("folder.list"),
@@ -100,14 +107,44 @@ export async function loadAll(opts = {}) {
   let stats = null;
   let buckets = [];
   let groupNames = {};
+  let taskPage = null;
+  const current = () => ok() && query === taskQueryKey() && (!opts.guard || opts.guard());
+  if (!current()) return;
+  async function paged(feature, params) {
+    for (let attempt=0; attempt<3; attempt++) {
+      if (!current()) return null;
+      if ('today' in params) params = {...params, today:health.today};
+      const changed = taskPager.configure(feature, params, health.task_token);
+      const offset = changed || opts.pageReset || state.taskPage?.key !== taskPager.key ? 0 : state.taskPage.offset;
+      try {
+        let result = await taskPager.get(offset);
+        if (!current()) return null;
+        // Deleting the last row of the last page must not strand an empty page.
+        if (!result.items.length && result.total && offset) result = await taskPager.get(Math.floor((result.total-1)/TASK_PAGE_SIZE)*TASK_PAGE_SIZE);
+        if (!current()) return null;
+        taskPage = {...result, items:undefined, groups:undefined, list_names:undefined,
+                    key:taskPager.key, query, loading:false};
+        taskPager.warm(result.offset, result);
+        return result;
+      } catch (error) {
+        if (!current()) return null;
+        if (error.code !== 'PAGE_CHANGED') throw error;
+        health = await call('app.health');
+      }
+    }
+    if (!current()) return null;
+    throw new ApiError('PAGE_CHANGED', t('task_page_changed'), {}, 409);
+  }
 
   if (state.searchQ) {
-    const r = await call("search.query", { q: state.searchQ });
+    const r = await paged("search.query", { q: state.searchQ });
+    if (!r) return;
     tasks = r.items;
   } else if (state.view.startsWith("filter:")) {
     // 自定义过滤器有自己的条件求值，不走内置视图
-    const r = await call("filter.tasks", {
-      item_id: state.view.slice(7), group: state.group, sort: state.sort, reverse: state.reverse });
+    const r = await paged("filter.tasks", {
+      item_id: state.view.slice(7), group: state.group, sort: state.sort, reverse: state.reverse, today:health.today });
+    if (!r) return;
     tasks = r.items;
     buckets = r.groups;
     groupNames = r.list_names || {};
@@ -134,10 +171,11 @@ export async function loadAll(opts = {}) {
     let name = v === 'inbox' ? 'all' : v, params = {};
     if (v.startsWith("group:")) { name = "all"; params = { list_id: v.slice(6) }; }
     else if (v.startsWith("tag:")) { name = "all"; params = { tag: v.slice(4) }; }
-    const r = await call("view.query", {
+    const r = await paged("view.query", {
       name, ...params, group: state.group, sort: state.sort,
-      reverse: state.reverse, include_done: v === "done",
+      reverse: state.reverse, include_done: v === "done", today:health.today,
     });
+    if (!r) return;
     tasks = r.items;
     buckets = r.groups;
     groupNames = r.list_names || {};
@@ -151,17 +189,50 @@ export async function loadAll(opts = {}) {
       catch (error) { if (error.code !== "NOT_FOUND") throw error; }
     }
   }
-  if (!ok() || (opts.guard && !opts.guard())) return;
+  if (!current()) return;
   let filterTitle = null;
   if (state.view.startsWith('filter:') && !catalogItems('filter').some(f=>f.id===state.view.slice(7))) {
     const selectedFilter = await call('filter.get',{item_id:state.view.slice(7)});
     filterTitle = selectedFilter.data.name;
   }
-  if (!ok() || (opts.guard && !opts.guard())) return;
+  if (!current()) return;
   patch({ health, filterTitle, groups: catalogItems("group"), tags: catalogItems("tag"), filters: catalogItems('filter'),
-          folders: list(folders), countdowns: list(countdowns), counts, tasks, board, calendar,
+          folders: list(folders), countdowns: list(countdowns), counts, tasks, taskPage, board, calendar,
           buckets, groupNames, stats: stats || state.stats });
   if (!opts.keepDetail && state.selected) await loadDetail(state.selected, opts);
+}
+
+export async function changeTaskPage(direction) {
+  const page = state.taskPage;
+  if (!page || page.loading || state.busy || (direction>0 && !page.has_more) || (direction<0 && !page.offset)) return;
+  const query = taskQueryKey();
+  if (page.query !== query) return;
+  const ok = fresh();
+  const current = () => ok() && state.taskPage?.key === page.key &&
+    query === taskQueryKey();
+  patch({taskPage:{...page, loading:true}});
+  try {
+    // Probe revision before using a prefetched page, including external API edits.
+    const health = await call('app.health');
+    if (!current()) return;
+    if (health.task_token !== state.health?.task_token || health.today !== state.health?.today) {
+      await loadAll({pageReset:true}); return;
+    }
+    const result = await taskPager.get(Math.max(0,page.offset + Math.sign(direction)*TASK_PAGE_SIZE));
+    if (!current()) return;
+    const names = {...(result.list_names || {})};
+    for (const item of catalogItems('group')) names[item.id] = item.data.name;
+    patch({tasks:result.items, buckets:result.groups || [], groupNames:names,
+      taskPage:{...page,total:result.total,offset:result.offset,has_more:result.has_more,loading:false}});
+    taskPager.warm(result.offset, result);
+    document.getElementById('scroll')?.scrollTo({top:0});
+  } catch (error) {
+    if (!current()) return;
+    if (error.code === 'PAGE_CHANGED') { await loadAll({pageReset:true}); return; }
+    throw error;
+  } finally {
+    if (state.taskPage?.key === page.key && state.taskPage.loading) patch({taskPage:{...state.taskPage,loading:false}});
+  }
 }
 
 export async function loadAlert(opts = {}) {
