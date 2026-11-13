@@ -33,9 +33,12 @@ public class AndroidNotificationActionsTest {
         return new JSONObject().put("item_id",task.getString("id")).put("kind","task").put("fire_at",fire)
             .put("expected_rev",new JSONObject().put("ms",Long.parseLong(revision[0])).put("seq",Long.parseLong(revision[1])).put("dev",revision[2]));
     }
-    private Notification notification(JSONObject payload){
-        for(StatusBarNotification item:context().getSystemService(NotificationManager.class).getActiveNotifications())
-            if(NotificationBridge.tag(payload).equals(item.getTag()))return item.getNotification();
+    private Notification notification(JSONObject payload) throws Exception {
+        for(int attempt=0;attempt<40;attempt++){
+            for(StatusBarNotification item:context().getSystemService(NotificationManager.class).getActiveNotifications())
+                if(NotificationBridge.tag(payload).equals(item.getTag())&&payload.getJSONObject("expected_rev").toString().equals(item.getNotification().extras.getString(NotificationBridge.SNAPSHOT)))return item.getNotification();
+            Thread.sleep(50); // NotificationManager enqueues system work asynchronously.
+        }
         return null;
     }
     private List<WorkInfo> finished(String id,int count) throws Exception {

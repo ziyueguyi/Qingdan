@@ -25,7 +25,7 @@ public final class NotificationActionReceiver extends BroadcastReceiver {
             PendingResult pending=goAsync();
             new Thread(()->{
                 try{WorkManager.getInstance(context).enqueueUniqueWork(key,ExistingWorkPolicy.KEEP,request).getResult().get(8,TimeUnit.SECONDS);}
-                catch(Exception error){android.util.Log.e("Qingdan","Notification action was not persisted",error);}
+                catch(Exception error){android.util.Log.e("Qingdan","Notification action was not persisted",error);NotificationBridge.finishAction(raw,"{\"ok\":false}");}
                 finally{pending.finish();}
             },"qingdan-notification-enqueue").start();
         }catch(Exception error){android.util.Log.e("Qingdan","Notification action could not be queued",error);}
