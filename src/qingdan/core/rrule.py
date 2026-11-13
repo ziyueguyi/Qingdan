@@ -368,7 +368,7 @@ def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
         if warnings is None:
             raise
         warnings.append({"key": "calendar_missing_year", "calendar_id": error.calendar_id,
-                         "year": error.year, "message": str(error)})
+                         "year": error.year})
     return out
 
 

@@ -435,7 +435,7 @@ async function fillRepeatInfo(id) {
     box.innerHTML = `
       ${info.needs_due_key ? `<div class="hint warn">${esc(t(info.needs_due_key))}</div>` : ""}
       ${info.invalid_rule_key ? `<div class="hint warn">${esc(t(info.invalid_rule_key))}</div>` : ""}
-      ${(info.warnings || []).map(w=>`<div class="hint warn">${esc(w.message)}</div>`).join("")}
+      ${(info.warnings || []).map(w=>`<div class="hint warn">${esc(t(w.key, w))}</div>`).join("")}
       <div class="row"><span class="k">${esc(t("rp_rule"))}</span>
         <span class="v">${esc(parts.filter(Boolean).join(" · ") || t("rp_none"))}</span></div>
       <div class="row"><span class="k">${esc(t("rp_next"))}</span>
@@ -1664,7 +1664,7 @@ async function previewRuleDialog() {
     if (!box.isConnected || !dialog.open || dialog.dataset.previewSeq !== ticket) return;
     box.hidden = false;
     const formatDate = value => new Intl.DateTimeFormat(locale(), {dateStyle:"medium", ...(value.includes("T") ? {timeStyle:"short"} : {})}).format(new Date(value.includes("T") ? value : value + "T00:00:00"));
-    box.innerHTML = `<strong>${esc(t("rp_first"))}</strong> ${esc(formatDate(preview.first_due_at))}<br>${esc((preview.upcoming || []).map(formatDate).join(" · "))}${(preview.warnings || []).map(w=>`<p class="danger">${esc(w.message)}</p>`).join("")}`;
+    box.innerHTML = `<strong>${esc(t("rp_first"))}</strong> ${esc(formatDate(preview.first_due_at))}<br>${esc((preview.upcoming || []).map(formatDate).join(" · "))}${(preview.warnings || []).map(w=>`<p class="danger">${esc(t(w.key, w))}</p>`).join("")}`;
   } catch (e) { if (error.isConnected && dialog.open && dialog.dataset.previewSeq === ticket) { error.hidden = false; error.textContent = e.message; } }
 }
 
