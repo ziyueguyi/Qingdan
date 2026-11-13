@@ -404,6 +404,8 @@ def task_update(item_id: str, **changes: Any) -> dict:
     if "repeat" in changes:
         changes["repeat"] = _validate_repeat(changes["repeat"])   # 曾经原样收下任意串
     data.update(changes)
+    if any(key in changes and changes[key] != old.data.get(key) for key in ('due_at','repeat','remind_at')):
+        data.pop('snoozed_until',None)
     if "list_id" in changes and changes["list_id"] != old.data.get("list_id") and "section_id" not in changes:
         data["section_id"] = None
     _validate_task_data(data, item_id)
@@ -722,6 +724,8 @@ def task_set_due(item_id: str, due_at: str | None = None, all_day: bool = False)
                                    got=due_at)
     data = {**old.data, "due_at": due_at or None,
             "due_all_day": bool(all_day) if due_at else True}
+    if data['due_at'] != old.data.get('due_at'):
+        data.pop('snoozed_until',None)
     # 这是独立接口、不经过 task.update，所以锚点必须在这里也维护一遍 ——
     # 漏掉的话「改到期日」后 COUNT 仍从旧锚数，用户看到的剩余次数是错的。
     data["repeat_start"] = _anchor_for(data.get("repeat"), data.get("due_at"))
@@ -740,6 +744,8 @@ def task_set_repeat(item_id: str, repeat: str | None = None) -> dict:
     old = _load(item_id, allow_deleted=False)
     canon = _validate_repeat(repeat)
     data = {**old.data, "repeat": canon, "repeat_start": _anchor_for(canon, old.data.get("due_at"))}
+    if canon != old.data.get('repeat'):
+        data.pop('snoozed_until',None)
     _align_workday_start(data)
     out = _bump(old, data).to_dict()
     if canon:
@@ -795,8 +801,9 @@ def task_set_reminder(item_id: str, remind_at: list | None = None, mode: str = "
         if bad:
             raise validation_error("未知告警渠道", allowed=["toast", "dingtalk", "email"],
                                    got=sorted(bad))
-    return _bump(old, {**old.data, "remind_at": times, "remind_mode": mode,
-                       "alert_channels": channels}).to_dict()
+    data = {**old.data, "remind_at": times, "remind_mode": mode, "alert_channels": channels}
+    data.pop('snoozed_until',None)
+    return _bump(old,data).to_dict()
 
 
 @feature(name="task.move", group="task", http=("POST", "/api/v1/tasks/{item_id}/move"),

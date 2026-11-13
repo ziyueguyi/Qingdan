@@ -20,6 +20,32 @@ const PL = { 1: "p_top", 2: "p_med", 3: "p_low", 4: "p_none" };
 const REPEAT_LABEL = { daily: "rp_daily", weekly: "rp_weekly", monthly: "rp_monthly", yearly: "rp_yearly" };
 const SWATCHES = ["#e5484d", "#e8912d", "#3b82f6", "#0f9d8e", "#7457e8"];
 
+let openingNotification = false;
+async function openPendingNotification() {
+  if (openingNotification || !state.booted || !globalThis.QingdanAndroid?.takeNotification) return;
+  openingNotification = true;
+  try {
+    const raw = globalThis.QingdanAndroid.takeNotification();
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    if (typeof payload.item_id !== 'string') return;
+    // Activity extras can be supplied externally: navigation always forces open,
+    // and never executes an action or trusts a caller-supplied feature name.
+    if (!$('mask').hidden && !confirm(t('notification_leave_dialog'))) return;
+    const target = await call('alert.notification_action',{item_id:payload.item_id,action:'open'});
+    if (target.status === 'gone') { showError(new Error(t('notification_gone'))); return; }
+    if (target.status !== 'open') return;
+    clearAccessSecret();
+    $('mask').hidden = true;
+    if (target.kind === 'countdown') await openCountdownDialog(target.item_id);
+    else {
+      $('app').classList.add('phone-detail');
+      await select(target.item_id);
+    }
+  } catch(error) { showError(error); }
+  finally { openingNotification = false; }
+}
+
 // --------------------------------------------------------------------------- 时间
 
 function dayDiff(iso, base) {
@@ -2074,6 +2100,8 @@ async function boot() {
     await Promise.all([loadAll(), loadAlert(), loadData()]);
     patch({ booted: true });
     render();
+    openPendingNotification();
+    setInterval(openPendingNotification,1000);
     setInterval(refreshExternalChanges, 2000);
     setInterval(refreshSyncPanel, 2000);
     addEventListener("focus", refreshExternalChanges);

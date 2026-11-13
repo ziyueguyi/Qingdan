@@ -80,14 +80,23 @@ public class AndroidOfflineAlertsTest {
             assertNotNull(info);assertEquals(info.toString(),WorkInfo.State.SUCCEEDED,info.getState());
             NotificationManager notifications=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
             boolean received=false;
+            Notification receivedNotification=null;
             for(int i=0;i<20&&!received;i++){
                 for(StatusBarNotification notification:notifications.getActiveNotifications()){
-                    CharSequence text=notification.getNotification().extras.getCharSequence(Notification.EXTRA_TEXT);
-                    if(text!=null&&text.toString().contains(title))received=true;
+                    CharSequence text=notification.getNotification().extras.getCharSequence(Notification.EXTRA_TITLE);
+                    if(text!=null&&text.toString().equals(title)){received=true;receivedNotification=notification.getNotification();}
                 }
                 if(!received)Thread.sleep(250);
             }
             assertTrue("Offline local worker did not post the due task notification",received);
+            assertNotNull(receivedNotification);assertEquals(2,receivedNotification.actions.length);
+            receivedNotification.actions[1].actionIntent.send();
+            boolean snoozed=false;
+            for(int i=0;i<80&&!snoozed;i++){
+                snoozed=call(context,"task.get",new JSONObject().put("item_id",itemId)).getJSONObject("data").has("snoozed_until");
+                if(!snoozed)Thread.sleep(250);
+            }
+            assertTrue("Notification snooze did not run without network",snoozed);
             assertEquals("enabled",shell(automation,"cmd connectivity airplane-mode"));
             android.net.Network active=connections.getActiveNetwork();
             assertNull("Network returned during offline test; capabilities="+

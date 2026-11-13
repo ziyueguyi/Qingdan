@@ -25,8 +25,13 @@ def initialize(directory):
         def is_configured(self):return True
         def enabled(self):return True
         def send(self,messages):
-            ok=bool(notifier.post('清单提醒','\n'.join(m.title for m in messages)))
-            return SendResult(ok=ok,sent_count=len(messages) if ok else 0,code=None if ok else 'permission_required')
+            sent=0
+            for message in messages:
+                payload=json.dumps({'item_id':message.item_id,'kind':message.kind,
+                                    'expected_rev':message.revision,'fire_at':message.fire_at_ms})
+                if notifier.postItem(message.title,message.when_text,payload):sent+=1
+            ok=sent==len(messages)
+            return SendResult(ok=ok,sent_count=sent,covered=sent,code='' if ok else 'permission_required')
         def test(self):
             ok=bool(notifier.post('清单','通知测试'))
             return SendResult(ok=ok,sent_count=1 if ok else 0)

@@ -7,6 +7,8 @@
 
 const DICT = {
   zh: {
+    notification_gone: '提醒对应的任务已删除或不存在。',
+    notification_leave_dialog: '打开提醒任务将关闭当前弹窗，未保存内容会丢失，继续吗？',
     calendar_events: '查看当日全部任务',
     sync_phase_idle: '暂无同步任务', sync_phase_preparing: '正在检查同步配置', sync_phase_fetching: '正在拉取远端数据',
     sync_result_counts: '拉取 {pulled} · 推送 {pushed} · 冲突 {conflicts}',
@@ -278,6 +280,8 @@ const DICT = {
     data_dir: "数据目录",
   },
   en: {
+    notification_gone: 'The item for this reminder was deleted or no longer exists.',
+    notification_leave_dialog: 'Open the reminder and close this dialog? Unsaved changes will be lost.',
     calendar_events: 'View all events on this day',
     sync_phase_idle: 'No sync running', sync_phase_preparing: 'Checking sync configuration', sync_phase_fetching: 'Fetching remote data',
     sync_result_counts: 'Pulled {pulled} · pushed {pushed} · conflicts {conflicts}',
