@@ -1,0 +1,28 @@
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidOfflineAlertsTest.java
+  s_7909b70258899a::t_a673b6a603f138 1-116
+android/app/src/main/java/com/ziyueguyi/qingdan/MainActivity.java
+  s_7909b70258899a::t_88197669624828 1-104
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidNotificationActionsTest.java
+  s_7909b70258899a::t_dcd1588d667380 36-38,40-41
+  s_7909b70258899a::t_4b998c4e902588 39
+android/app/src/main/java/com/ziyueguyi/qingdan/NotificationActionReceiver.java
+  s_7909b70258899a::t_dcd1588d667380 28
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_f29586512f1f35 1-205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0453895ed9ed67156ca04704bb28eaeb2895a119",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": null
+    }
+  }
+}
