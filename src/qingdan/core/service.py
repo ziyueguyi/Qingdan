@@ -896,14 +896,21 @@ def note_delete(item_id: str) -> dict:
 
 @feature(name="search.query", group="search", http=("GET", "/api/v1/search"), idempotent=True)
 def search_query(q: str, kinds: list | None = None, include_deleted: bool = False,
-                 limit: int = 200) -> dict:
+                 limit: int = 200, offset: int = 0) -> dict:
     """中文子串搜索用 LIKE。FTS5 的 trigram 分词按 3 字符建索引，
     「立案」「周报」这类两字词命中恒为 0（spike/fts_probe.py 实测），故不采用。"""
     if not q or not q.strip():
         raise validation_error("q 不能为空")
-    items = ctx.need_store().search_text(q.strip(), kinds=kinds,
-                                         include_deleted=include_deleted, limit=limit)
-    return {"total": len(items), "items": [it.to_dict() for it in items]}
+    from qingdan.core import task_query
+    where, args = ['(i.data LIKE ? OR i.meta LIKE ?)'], [f'%{q.strip()}%'] * 2
+    if kinds:
+        where.append('i.kind IN (' + ','.join('?' for _ in kinds) + ')')
+        args.extend(kinds)
+    if not include_deleted:
+        where.append('i.deleted=0')
+    items, page = task_query.select(ctx.need_store(), where, args, limit=limit, offset=offset,
+                                   order='i.kind,i.id')
+    return {**page, "items": [it.to_dict() for it in items]}
 
 
 @feature(name="undo.last", group="undo", http=("POST", "/api/v1/undo"), undoable=False)
