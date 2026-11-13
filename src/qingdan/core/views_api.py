@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from qingdan.core import stamp, view
+from qingdan.core import stamp, view, task_query
 from qingdan.core.context import ctx
 from qingdan.core.registry import feature, not_found, validation_error
 
@@ -36,14 +36,13 @@ def _pool(tasks_only: bool = True):
 
 @feature(name="view.board", group="view", http=("GET", "/api/v1/views/board"), idempotent=True)
 def view_board(group_by: str = "status", list_id: str | None = None,
-               today: str | None = None) -> dict:
-    d = _today_or(today)
-    pool = [it for it in _pool() if view.is_alive(it)]
-    if list_id:
-        pool = [it for it in pool if it.data.get("list_id") == list_id]
-    names = _group_names(pool)
-    cols = view.board_columns(pool, group_by, names, d)
-    return {"group_by": group_by, "total": len(pool), "columns": cols, "list_names": names}
+               today: str | None = None, tag: str | None = None, name: str = "all",
+               include_done: bool = False, filter_id: str | None = None,
+               sort: str = "smart", reverse: bool = False, limit: int = 0, offset: int = 0,
+               column: str | None = None, columns_limit: int = 0, columns_offset: int = 0) -> dict:
+    from qingdan.core.board_query import query
+    return query(ctx.need_store(), _today_or(today), group_by, list_id, tag, name, include_done,
+                 filter_id, sort, reverse, limit, offset, column, columns_limit, columns_offset)
 
 
 # --------------------------------------------------------------------------- 日历
@@ -51,18 +50,14 @@ def view_board(group_by: str = "status", list_id: str | None = None,
 
 @feature(name="view.calendar", group="view", http=("GET", "/api/v1/calendar"), idempotent=True)
 def view_calendar(start: str | None = None, days: int = 42, today: str | None = None,
-                  include_countdown: bool = True, list_id: str | None = None) -> dict:
+                  include_countdown: bool = True, list_id: str | None = None,
+                  limit: int = 0, offset: int = 0, tag: str | None = None,
+                  filter_id: str | None = None, name: str = 'all') -> dict:
+    from qingdan.core.calendar_query import query
     d = _today_or(today)
     frm = _today_or(start) if start else d.replace(day=1)
-    if not 1 <= int(days) <= 370:
-        raise validation_error("days 需在 1..370", got=days)
-    items = [it for it in ctx.need_store().list_items() if view.is_alive(it)]
-    if list_id:
-        items = [it for it in items if it.data.get("list_id") == list_id]
-    if not include_countdown:
-        items = [it for it in items if it.kind != "countdown"]
-    return {"start": frm.isoformat(), "days": int(days), "today": d.isoformat(),
-            "cells": view.calendar_days(items, frm, int(days), d)}
+    return query(ctx.need_store(),frm,int(days),d,include_countdown,list_id,
+                 limit,offset,tag,filter_id,name)
 
 
 # --------------------------------------------------------------------------- 视图偏好（本地，不同步）
@@ -94,7 +89,8 @@ def view_pref_set(prefs: dict) -> dict:
 @feature(name="view.query", group="view", http=("GET", "/api/v1/views/{name}"), idempotent=True)
 def view_query(name: str, today: str | None = None, group: str = "date", sort: str = "smart",
                reverse: bool = False, include_done: bool = False,
-               list_id: str | None = None, tag: str | None = None) -> dict:
+               list_id: str | None = None, tag: str | None = None,
+               limit: int = 0, offset: int = 0) -> dict:
     """五个内置视图 + all 的统一入口。视图是查询，不是数据副本。"""
     d = _today_or(today)
     if name not in view.VIEW_NAMES:
@@ -104,29 +100,22 @@ def view_query(name: str, today: str | None = None, group: str = "date", sort: s
     if sort not in view.SORT_MODES:
         raise validation_error("未知排序方式", allowed=list(view.SORT_MODES), got=sort)
 
-    # 取全量（含墓碑）再交给 apply_view —— 垃圾桶视图要看的就是墓碑，
-    # 这里若过滤掉已删除项，trash 会永远是空的。
-    pool = ctx.need_store().list_items(kind="task", include_deleted=True)
-    if list_id:
-        pool = [it for it in pool if it.data.get("list_id") == list_id]
-    if tag:
-        pool = [it for it in pool if tag in (it.data.get("tags") or [])]
-
-    items = view.apply_view(name, pool, d, include_done=include_done)
-    ordered = view.sort_items(items, sort, reverse)
-    names = _group_names(ordered)
-    buckets = view.group_items(ordered, group, d, names)
-    return {
-        "view": name,
-        "today": d.isoformat(),
-        "list_names": names,
-        "total": len(ordered),
-        # label_key 给 UI 文案（需翻译），label 给用户数据（永不翻译）
-        "groups": [{"key": b["key"], "label_key": b["label_key"], "label": b["label"],
-                    "total": len(b["items"]),
-                    "items": [it.to_dict() for it in b["items"]]} for b in buckets],
-        "items": [it.to_dict() for it in ordered],
-    }
+    with ctx.need_store().read_snapshot():
+        where, args = task_query.view_where(name, d, include_done, list_id, tag)
+        ordered, page = task_query.select(ctx.need_store(), where, args, sort, reverse, limit, offset)
+        names = _group_names(ordered)
+        buckets = view.group_items(ordered, group, d, names)
+        return {
+            "view": name,
+            "today": d.isoformat(),
+            "list_names": names,
+            **page,
+            # label_key 给 UI 文案（需翻译），label 给用户数据（永不翻译）
+            "groups": [{"key": b["key"], "label_key": b["label_key"], "label": b["label"],
+                        "total": len(b["items"]),
+                        "items": [it.to_dict() for it in b["items"]]} for b in buckets],
+            "items": [it.to_dict() for it in ordered],
+        }
 
 
 @feature(name="view.counts", group="view", http=("GET", "/api/v1/views/counts"), idempotent=True)
@@ -137,24 +126,31 @@ def view_counts(today: str | None = None) -> dict:
     全部/收集箱/已完成都会显示成今天的条数（实测踩过）。
     """
     d = _today_or(today)
-    pool = ctx.need_store().list_items(kind="task", include_deleted=True)
-    counts = {name: len(view.apply_view(name, pool, d, include_done=(name == "done")))
-              for name in view.VIEW_NAMES}
-    counts["overdue"] = len([it for it in view.apply_view("today", pool, d)
-                             if (n := view.days_between(view.due_key(it), d)) is not None and n < 0])
-    # 分组与标签的角标也一并给出：前端逐组请求会打 N 次接口，用当前视图自己数又是错的
-    alive = [it for it in pool if not it.deleted]
-    by_group: dict[str, int] = {}
-    by_tag: dict[str, int] = {}
-    for it in alive:
-        lid = it.data.get("list_id")
-        if lid:
-            by_group[lid] = by_group.get(lid, 0) + 1
-        for name in (it.data.get("tags") or []):
-            by_tag[name] = by_tag.get(name, 0) + 1
-    counts["by_group"] = by_group
-    counts["by_tag"] = by_tag
-    return counts
+    with ctx.need_store().read_snapshot():
+        db = task_query.connection(ctx.need_store())
+        from datetime import timedelta
+        # LIMIT -1 keeps this derived table as a streaming subquery on SQLite,
+        # allowing date normalization once per row without a persistent custom index.
+        row = db.execute(f"""SELECT
+            coalesce(sum(alive AND opened AND due<=?),0),
+            coalesce(sum(alive AND opened AND due<=?),0),
+            coalesce(sum(alive AND opened AND coalesce(list_id,'')=''),0),
+            coalesce(sum(alive AND status='done'),0),
+            coalesce(sum(trashed),0),coalesce(sum(alive),0),
+            coalesce(sum(alive AND opened AND due<?),0)
+            FROM (SELECT i.deleted=0 alive,i.deleted=1 trashed,{task_query.OPEN} opened,
+                         {task_query.STATUS} status,{task_query.DUE} due,
+                         json_extract(i.data,'$.list_id') list_id
+                  FROM item i WHERE i.kind='task' LIMIT -1)""",
+            [d.isoformat(), (d + timedelta(days=6)).isoformat(), d.isoformat()]).fetchone()
+        counts = dict(zip([*view.VIEW_NAMES, "overdue"], row))
+        counts["by_group"] = dict(db.execute(
+            "SELECT json_extract(data,'$.list_id'),COUNT(*) FROM item WHERE kind='task' AND deleted=0 "
+            "AND coalesce(json_extract(data,'$.list_id'),'')<>'' GROUP BY json_extract(data,'$.list_id')"))
+        counts["by_tag"] = dict(db.execute(
+            "SELECT t.value,COUNT(*) FROM item i,json_each(i.data,'$.tags') t "
+            "WHERE i.kind='task' AND i.deleted=0 GROUP BY t.value"))
+        return counts
 
 
 # --------------------------------------------------------------------------- 统计
@@ -163,24 +159,25 @@ def view_counts(today: str | None = None) -> dict:
 @feature(name="stats.today", group="stats", http=("GET", "/api/v1/stats/today"), idempotent=True)
 def stats_today(today: str | None = None) -> dict:
     d = _today_or(today)
-    tasks = [it for it in ctx.need_store().list_items(kind="task") if view.is_alive(it)]
-    open_t = [it for it in tasks if view.is_open(it)]
-    overdue = [it for it in open_t
-               if (n := view.days_between(it.data.get("due_at"), d)) is not None and n < 0]
-    due_today = [it for it in open_t if view.days_between(it.data.get("due_at"), d) == 0]
-    done_today = [it for it in tasks
-                  if it.data.get("status") == "done"
-                  and view.to_date(it.data.get("done_at")) == d]
-    by_prio = {str(p): sum(1 for it in open_t if int(it.data.get("priority", 4)) == p)
-               for p in (1, 2, 3, 4)}
-    cds = []
-    for it in ctx.need_store().list_items(kind="countdown"):
-        n = view.days_between(it.data.get("target_date"), d)
-        if n is not None and 0 <= n <= 30:
-            cds.append({"id": it.id, "title": it.data.get("title"), "days_left": n})
-    cds.sort(key=lambda x: x["days_left"])
-    return {"today": d.isoformat(), "open_total": len(open_t), "overdue": len(overdue),
-            "due_today": len(due_today), "done_today": len(done_today),
-            "by_priority": by_prio, "countdown_soon": cds,
-            "groups": len(ctx.need_store().list_items(kind="list")),
-            "tags": len(ctx.need_store().list_items(kind="tag"))}
+    from datetime import timedelta
+    with ctx.need_store().read_snapshot():
+        db = task_query.connection(ctx.need_store())
+        day = d.isoformat()
+        status, due, open_ = task_query.STATUS, task_query.DUE, task_query.OPEN
+        totals = db.execute(f"""SELECT
+            coalesce(sum(CASE WHEN {open_} THEN 1 ELSE 0 END),0),
+            coalesce(sum(CASE WHEN {open_} AND {due}<? THEN 1 ELSE 0 END),0),
+            coalesce(sum(CASE WHEN {open_} AND {due}=? THEN 1 ELSE 0 END),0),
+            coalesce(sum(CASE WHEN {status}='done' AND qd_day(json_extract(i.data,'$.done_at'))=? THEN 1 ELSE 0 END),0)
+            FROM item i WHERE i.kind='task' AND i.deleted=0""", [day, day, day]).fetchone()
+        priorities = dict(db.execute(f"SELECT {task_query.PRIORITY},COUNT(*) FROM item i "
+                                    f"WHERE i.kind='task' AND i.deleted=0 AND {open_} GROUP BY {task_query.PRIORITY}"))
+        rows = db.execute("SELECT id,json_extract(data,'$.title') title,qd_day(json_extract(data,'$.target_date')) target "
+                          "FROM item WHERE kind='countdown' AND deleted=0 AND target BETWEEN ? AND ? ORDER BY target,id",
+                          [day, (d + timedelta(days=30)).isoformat()])
+        cds = [{"id": row["id"], "title": row["title"], "days_left": (view.as_date(row["target"]) - d).days} for row in rows]
+        return {"today": day, "open_total": totals[0], "overdue": totals[1],
+                "due_today": totals[2], "done_today": totals[3],
+                "by_priority": {str(p): priorities.get(p, 0) for p in (1, 2, 3, 4)}, "countdown_soon": cds,
+                "groups": db.execute("SELECT COUNT(*) FROM item WHERE kind='list' AND deleted=0").fetchone()[0],
+                "tags": db.execute("SELECT COUNT(*) FROM item WHERE kind='tag' AND deleted=0").fetchone()[0]}

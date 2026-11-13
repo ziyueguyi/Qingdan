@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -129,9 +130,51 @@ CREATE TABLE IF NOT EXISTS alert_log (
   detail   TEXT NOT NULL
 );
 
+-- Device-local notification inbox. No row is serialized into sync Items.
+CREATE TABLE IF NOT EXISTS notification_item (
+  item_id TEXT PRIMARY KEY, kind TEXT NOT NULL, revision TEXT NOT NULL,
+  fire_at INTEGER NOT NULL, received_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notification_received ON notification_item(received_at DESC,item_id);
+CREATE TABLE IF NOT EXISTS notification_revision(id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL);
+INSERT OR IGNORE INTO notification_revision(id,value) VALUES(1,0);
+CREATE TRIGGER IF NOT EXISTS notification_insert AFTER INSERT ON notification_item BEGIN
+  UPDATE notification_revision SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS notification_update AFTER UPDATE ON notification_item BEGIN
+  UPDATE notification_revision SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS notification_delete AFTER DELETE ON notification_item BEGIN
+  UPDATE notification_revision SET value=value+1 WHERE id=1; END;
+
 -- 密钥：DPAPI 密文，绑定当前 Windows 用户 + 本机（换机需重填）
 CREATE TABLE IF NOT EXISTS secret (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 """
+
+
+# Native SQLite triggers also observe writes made by older clients/processes.
+# Keep item changes separate from preferences/sync progress: metadata refreshes
+# must not invalidate task pages when their underlying items did not change.
+REVISION_SCHEMA = """
+CREATE TABLE IF NOT EXISTS change_revision (
+  id INTEGER PRIMARY KEY CHECK(id=1), items INTEGER NOT NULL, metadata INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO change_revision(id,items,metadata) VALUES(1,0,0);
+""" + "".join(
+    f"CREATE TRIGGER IF NOT EXISTS qd_revision_{table}_{operation.lower()} "
+    f"AFTER {operation} ON {table} BEGIN "
+    f"UPDATE change_revision SET {column}={column}+1 WHERE id=1; END;\n"
+    for table, column in (("item", "items"), ("settings", "metadata"),
+                          ("view_pref", "metadata"), ("sync_state", "metadata"))
+    for operation in ("INSERT", "UPDATE", "DELETE")
+)
+
+
+class _Connection(sqlite3.Connection):
+    """Keep existing commit behavior, except inside an explicit atomic scope."""
+    _deferred_commits=0
+
+    def commit(self):
+        if not self._deferred_commits:
+            return super().commit()
 
 
 class Store:
@@ -143,7 +186,7 @@ class Store:
         self.operation_lock = threading.RLock()
         self.sync_lock = threading.RLock()  # Git worktree operations, independent of task editing.
         self.autosync_lock = threading.Lock()
-        self.db.executescript(SCHEMA)          # 建表只需做一次，WAL 下其它连接可见
+        self.db.executescript(SCHEMA + REVISION_SCHEMA)
         if not self._setting("catalog_tag_index_v1"):
             self.db.execute(
                 "INSERT OR IGNORE INTO task_tag_ref(task_id,name) "
@@ -165,12 +208,43 @@ class Store:
         """
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(str(self.path), timeout=10)
+            conn = sqlite3.connect(str(self.path), timeout=10,factory=_Connection)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             self._local.conn = conn
         return conn
+
+    @contextmanager
+    def atomic_write(self):
+        """Hold SQLite's writer reservation across service-level commits.
+
+        operation_lock serializes one process; BEGIN IMMEDIATE also protects
+        against another local CLI process. A caller's transaction is preserved.
+        """
+        db=self.db
+        depth=db._deferred_commits
+        owned=not db.in_transaction
+        savepoint=f'qd_atomic_{depth}'
+        db.execute('BEGIN IMMEDIATE' if owned else f'SAVEPOINT {savepoint}')
+        db._deferred_commits=depth+1
+        try:
+            yield
+        except BaseException:
+            db._deferred_commits=depth
+            if owned:sqlite3.Connection.rollback(db)
+            else:
+                db.execute(f'ROLLBACK TO {savepoint}')
+                db.execute(f'RELEASE {savepoint}')
+            raise
+        else:
+            db._deferred_commits=depth
+            if owned:
+                try:sqlite3.Connection.commit(db)
+                except BaseException:
+                    sqlite3.Connection.rollback(db)
+                    raise
+            else:db.execute(f'RELEASE {savepoint}')
 
     # ------------------------------------------------------------------ 时钟
     def next_rev(self) -> Rev:
@@ -256,8 +330,23 @@ class Store:
         return dict(row)
 
     def change_token(self) -> list[int]:
-        # data_version 看其它连接的提交；total_changes 看本连接处理的 API 写入。
-        return [self.db.execute("PRAGMA data_version").fetchone()[0], self.db.total_changes]
+        row = self.db.execute("SELECT items,metadata FROM change_revision WHERE id=1").fetchone()
+        return [int(row[0]), int(row[1])]
+
+    def task_change_token(self) -> int:
+        return int(self.db.execute("SELECT items FROM change_revision WHERE id=1").fetchone()[0])
+
+    @contextmanager
+    def read_snapshot(self):
+        db = self.db
+        owns_snapshot = not db.in_transaction
+        if owns_snapshot:
+            db.execute('BEGIN')
+        try:
+            yield db
+        finally:
+            if owns_snapshot:
+                db.rollback()
 
     def list_names(self, ids: Iterable[str]) -> dict[str, str]:
         ids = list(dict.fromkeys(x for x in ids if x))

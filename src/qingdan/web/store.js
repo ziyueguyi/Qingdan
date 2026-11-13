@@ -8,6 +8,36 @@
  */
 import { call, ApiError } from "./api.js";
 import { refreshCatalogs, catalogItems } from "./catalog.js";
+import { TaskPager, TASK_PAGE_SIZE } from "./task_pages.js";
+import { BoardPager, BOARD_CARD_SIZE, BOARD_COLUMN_SIZE } from "./board_pages.js";
+import { t } from "./i18n.js";
+
+const taskPager = new TaskPager(call);
+const boardPager = new BoardPager(call);
+const boardRequests = new Map();
+let boardRequestSequence = 0;
+const taskQueryKey = () => JSON.stringify([state.view,state.layout,state.searchQ,state.group,state.sort,state.reverse]);
+
+function selectedTaskScope() {
+  const v = state.view;
+  let scope = {name:v === 'inbox' ? 'all' : v,include_done:v === 'done'};
+  if (v.startsWith('group:')) scope = {name:'all',list_id:v.slice(6)};
+  else if (v.startsWith('tag:')) scope = {name:'all',tag:v.slice(4)};
+  else if (v.startsWith('filter:')) scope = {name:'all',filter_id:v.slice(7)};
+  return scope;
+}
+
+function boardNames(board) {
+  const names = {...board.list_names};
+  for (const column of board.columns) Object.assign(names,column.list_names || {});
+  for (const item of catalogItems('group')) names[item.id] = item.data.name;
+  return names;
+}
+
+function keepBoardRequests(board) {
+  const visible = new Set(board.columns.map(c=>c.key));
+  for (const key of boardRequests.keys()) if (typeof key==='string' && !visible.has(key)) boardRequests.delete(key);
+}
 
 export const state = {
   booted: false,
@@ -27,6 +57,7 @@ export const state = {
   searchQ: "",
 
   tasks: [],
+  taskPage: null,
   groups: [],
   groupNames: {},
   tags: [],
@@ -87,61 +118,118 @@ export async function loadAll(opts = {}) {
   const ok = fresh();
   const list = (r) => r.items || [];          // 后端集合类接口统一返回 {total, items}
   if (state.view === 'all') state.view = 'inbox';
-  const [health, , folders, countdowns, counts] = await Promise.all([
+  const query = taskQueryKey();
+  let [health, , folders, countdowns, counts, stats] = await Promise.all([
     call("app.health"),
     refreshCatalogs(),
     call("folder.list"),
     call("countdown.list"),
     call("view.counts"),
+    call("stats.today"),
   ]);
   let tasks = [];
   let board = null;
   let calendar = null;
-  let stats = null;
   let buckets = [];
   let groupNames = {};
+  let taskPage = null;
+  const current = () => ok() && query === taskQueryKey() && (!opts.guard || opts.guard());
+  if (!current()) return;
+  async function paged(feature, params) {
+    for (let attempt=0; attempt<3; attempt++) {
+      if (!current()) return null;
+      if ('today' in params) params = {...params, today:health.today};
+      const changed = taskPager.configure(feature, params, health.task_token);
+      const offset = changed || opts.pageReset || state.taskPage?.key !== taskPager.key ? 0 : state.taskPage.offset;
+      try {
+        let result = await taskPager.get(offset);
+        if (!current()) return null;
+        // Deleting the last row of the last page must not strand an empty page.
+        if (!result.items.length && result.total && offset) result = await taskPager.get(Math.floor((result.total-1)/TASK_PAGE_SIZE)*TASK_PAGE_SIZE);
+        if (!current()) return null;
+        taskPage = {...result, items:undefined, groups:undefined, list_names:undefined,
+                    key:taskPager.key, query, loading:false};
+        taskPager.warm(result.offset, result);
+        return result;
+      } catch (error) {
+        if (!current()) return null;
+        if (error.code !== 'PAGE_CHANGED') throw error;
+        health = await call('app.health');
+      }
+    }
+    if (!current()) return null;
+    throw new ApiError('PAGE_CHANGED', t('task_page_changed'), {}, 409);
+  }
+
+  async function loadBoard() {
+    for (let attempt=0; attempt<3; attempt++) {
+      if (!current()) return null;
+      const by = ["status","group","priority"].includes(state.group) ? state.group : "status";
+      const params = {...selectedTaskScope(),group_by:by,sort:state.sort,reverse:state.reverse,today:health.today};
+      const changed = boardPager.configure(params,health.task_token);
+      const offset = changed || opts.boardReset || state.board?.key!==boardPager.key ? 0 : state.board.columns_offset;
+      try {
+        const result = await boardPager.get(offset);
+        if (!current() || !result) return null;
+        keepBoardRequests(result);
+        return result;
+      } catch (error) {
+        if (!current()) return null;
+        if (error.code!=='PAGE_CHANGED') throw error;
+        health = await call('app.health');
+      }
+    }
+    if (!current()) return null;
+    throw new ApiError('PAGE_CHANGED',t('task_page_changed'),{},409);
+  }
 
   if (state.searchQ) {
-    const r = await call("search.query", { q: state.searchQ });
+    const r = await paged("search.query", { q: state.searchQ });
+    if (!r) return;
     tasks = r.items;
-  } else if (state.view.startsWith("filter:")) {
-    // 自定义过滤器有自己的条件求值，不走内置视图
-    const r = await call("filter.tasks", {
-      item_id: state.view.slice(7), group: state.group, sort: state.sort, reverse: state.reverse });
-    tasks = r.items;
-    buckets = r.groups;
-    groupNames = r.list_names || {};
   } else if (state.layout === "board") {
-    // 分组下拉的值（date/priority/tag/group/none）和看板的 group_by 不是同一套枚举，
-    // 直接把 state.group 透传会被后端拒绝成 422（实测踩过：看板一片空白且没有明显报错）
-    const by = ["status", "group", "priority"].includes(state.group) ? state.group : "status";
-    board = await call("view.board", { group_by: by, list_id: state.view.startsWith("group:") ? state.view.slice(6) : null });
-    tasks = board.columns.flatMap((c) => c.items);
-    groupNames = board.list_names || {};
+    board = await loadBoard();
+    if (!board) return;
+    tasks = board.columns.flatMap(c=>c.items);
+    groupNames = boardNames(board);
   } else if (state.layout === "calendar") {
     const month = state.calendarMonth ? new Date(state.calendarMonth + "T12:00:00") : new Date();
     month.setDate(1);
     const first = new Date(month);
     first.setDate(1 - (first.getDay() + 6) % 7);
     const dateText = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    calendar = await call("view.calendar", { start: dateText(first), days: 42, list_id: state.view.startsWith("group:") ? state.view.slice(6) : null });
+    const scope = selectedTaskScope();
+    // Smart day/week navigation still shows the whole browsed month.
+    if (scope.name !== 'done' && scope.name !== 'trash') scope.name = 'all';
+    delete scope.include_done;
+    const query = {...scope,start:dateText(first),days:42,today:health.today,limit:3};
+    calendar = await call("view.calendar", query);
+    calendar.query = query;
     calendar.month = dateText(month);
     calendar.cells.forEach(c => { c.in_month = c.date.slice(0,7) === calendar.month.slice(0,7); });
     tasks = [];
+  } else if (state.view.startsWith("filter:")) {
+    // 自定义过滤器有自己的条件求值，不走内置视图
+    const r = await paged("filter.tasks", {
+      item_id: state.view.slice(7), group: state.group, sort: state.sort, reverse: state.reverse, today:health.today });
+    if (!r) return;
+    tasks = r.items;
+    buckets = r.groups;
+    groupNames = r.list_names || {};
   } else {
     // 复合视图：group:<id> / tag:<name> 用内置 all 视图 + 参数过滤
     const v = state.view;
     let name = v === 'inbox' ? 'all' : v, params = {};
     if (v.startsWith("group:")) { name = "all"; params = { list_id: v.slice(6) }; }
     else if (v.startsWith("tag:")) { name = "all"; params = { tag: v.slice(4) }; }
-    const r = await call("view.query", {
+    const r = await paged("view.query", {
       name, ...params, group: state.group, sort: state.sort,
-      reverse: state.reverse, include_done: v === "done",
+      reverse: state.reverse, include_done: v === "done", today:health.today,
     });
+    if (!r) return;
     tasks = r.items;
     buckets = r.groups;
     groupNames = r.list_names || {};
-    stats = await call("stats.today");
   }
   for (const item of catalogItems("group")) groupNames[item.id] = item.data.name;
   if (state.view.startsWith("group:")) {
@@ -151,17 +239,96 @@ export async function loadAll(opts = {}) {
       catch (error) { if (error.code !== "NOT_FOUND") throw error; }
     }
   }
-  if (!ok() || (opts.guard && !opts.guard())) return;
+  if (!current()) return;
   let filterTitle = null;
   if (state.view.startsWith('filter:') && !catalogItems('filter').some(f=>f.id===state.view.slice(7))) {
     const selectedFilter = await call('filter.get',{item_id:state.view.slice(7)});
     filterTitle = selectedFilter.data.name;
   }
-  if (!ok() || (opts.guard && !opts.guard())) return;
+  if (!current()) return;
   patch({ health, filterTitle, groups: catalogItems("group"), tags: catalogItems("tag"), filters: catalogItems('filter'),
-          folders: list(folders), countdowns: list(countdowns), counts, tasks, board, calendar,
+          folders: list(folders), countdowns: list(countdowns), counts, tasks, taskPage, board, calendar,
           buckets, groupNames, stats: stats || state.stats });
   if (!opts.keepDetail && state.selected) await loadDetail(state.selected, opts);
+}
+
+export async function changeTaskPage(direction) {
+  const page = state.taskPage;
+  if (!page || page.loading || state.busy || (direction>0 && !page.has_more) || (direction<0 && !page.offset)) return;
+  const query = taskQueryKey();
+  if (page.query !== query) return;
+  const ok = fresh();
+  const current = () => ok() && state.taskPage?.key === page.key &&
+    query === taskQueryKey();
+  patch({taskPage:{...page, loading:true}});
+  try {
+    // Probe revision before using a prefetched page, including external API edits.
+    const health = await call('app.health');
+    if (!current()) return;
+    if (health.task_token !== state.health?.task_token || health.today !== state.health?.today) {
+      await loadAll({pageReset:true}); return;
+    }
+    const result = await taskPager.get(Math.max(0,page.offset + Math.sign(direction)*TASK_PAGE_SIZE));
+    if (!current()) return;
+    const names = {...(result.list_names || {})};
+    for (const item of catalogItems('group')) names[item.id] = item.data.name;
+    patch({tasks:result.items, buckets:result.groups || [], groupNames:names,
+      taskPage:{...page,total:result.total,offset:result.offset,has_more:result.has_more,loading:false}});
+    taskPager.warm(result.offset, result);
+    document.getElementById('scroll')?.scrollTo({top:0});
+  } catch (error) {
+    if (!current()) return;
+    if (error.code === 'PAGE_CHANGED') { await loadAll({pageReset:true}); return; }
+    throw error;
+  } finally {
+    if (state.taskPage?.key === page.key && state.taskPage.loading) patch({taskPage:{...state.taskPage,loading:false}});
+  }
+}
+
+export async function changeBoardPage(columnKey, direction) {
+  const board = state.board;
+  const column = columnKey === null ? null : board?.columns.find(c=>c.key===columnKey);
+  if (!board || state.busy || board.columns_loading || (columnKey!==null && (!column || column.loading))) return;
+  const offset = column ? column.offset : board.columns_offset;
+  const more = column ? column.has_more : board.columns_has_more;
+  if ((direction>0 && !more) || (direction<0 && !offset)) return;
+  const requestKey = columnKey === null ? Symbol.for('board-columns') : columnKey;
+  const ticket = ++boardRequestSequence, query = taskQueryKey();
+  boardRequests.set(requestKey,ticket);
+  const current = () => boardPager.key===board.key && state.board?.key===board.key && state.board.window===board.window &&
+    (columnKey===null || boardPager.window===board.window) && query===taskQueryKey() && boardRequests.get(requestKey)===ticket;
+  const mark = loading => {
+    if (!current()) return;
+    if (column ? state.board.columns.find(c=>c.key===columnKey)?.loading===loading : state.board.columns_loading===loading) return;
+    patch({board:column ? {...state.board,columns:state.board.columns.map(c=>c.key===columnKey ? {...c,loading} : c)}
+      : {...state.board,columns_loading:loading}});
+  };
+  mark(true);
+  try {
+    const health = await call('app.health');
+    if (!current() || state.busy) return;
+    if (health.task_token!==state.health?.task_token || health.today!==state.health?.today) {
+      await loadAll({boardReset:true});return;
+    }
+    const next = Math.max(0,offset+Math.sign(direction)*(column ? BOARD_CARD_SIZE : BOARD_COLUMN_SIZE));
+    if (column) {
+      const result = await boardPager.cards(columnKey,next);
+      if (!current() || state.busy) return;
+      const updated = {...state.board,columns:state.board.columns.map(c=>c.key===columnKey ? {...result,loading:false} : c)};
+      patch({board:updated,tasks:updated.columns.flatMap(c=>c.items),groupNames:boardNames(updated)});
+      [...document.querySelectorAll('.board-cards')].find(el=>el.dataset.column===columnKey)?.scrollTo({top:0});
+    } else {
+      const result = await boardPager.get(next);
+      if (!current() || state.busy || !result) return;
+      keepBoardRequests(result);
+      patch({board:result,tasks:result.columns.flatMap(c=>c.items),groupNames:boardNames(result)});
+      document.querySelector('.board')?.scrollTo({left:0});
+    }
+  } catch (error) {
+    if (!current()) return;
+    if (error.code==='PAGE_CHANGED') { await loadAll({boardReset:true});return; }
+    throw error;
+  } finally { mark(false); }
 }
 
 export async function loadAlert(opts = {}) {

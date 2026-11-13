@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-13",
+  "browser": {
+    "environment": "isolated desktop browser, real HTTP API, simulated async pywebview navigation bridge",
+    "initial_records": 10000,
+    "visible_records": 50,
+    "second_range": [
+      51,
+      100,
+      10000
+    ],
+    "scroll_next_range": [
+      101,
+      150,
+      10000
+    ],
+    "scroll_after_page": 0,
+    "query_samples_ms": [
+      6.9,
+      7.8,
+      8.0,
+      10.3,
+      11.5,
+      8.7
+    ],
+    "stale_completion_rejected": true,
+    "stale_complete_button_removed": true,
+    "completed_target_status": "done",
+    "snoozed_due_unchanged": true,
+    "record_count_after_dismiss_complete_snooze": 9997
+  },
+  "windows_native": {
+    "event": "synthetic NIN_BALLOONUSERCLICK to owned HWND",
+    "tray_event": "passed",
+    "consume_once": "passed",
+    "renderer": "real hidden Edge WebView2",
+    "bridge": "real pywebview Python API",
+    "tasks": 10000,
+    "visible_records": 50,
+    "range": [
+      51,
+      100,
+      10000
+    ],
+    "opened_task": "WIN00050",
+    "physical_mouse_click": "not tested",
+    "system_balloon_display": "not tested",
+    "ordinary_sandbox_attempt": "initialization timeout; not passed",
+    "permitted_local_graphics_attempt": "passed"
+  },
+  "android": {
+    "commit": "b7f554cf41ff648a29305383a2616e9526f57ede",
+    "run": "https://github.com/ziyueguyi/Qingdan/actions/runs/43421156780",
+    "environment": "Android 17 emulator; no physical phone available",
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "screenshot_source": "native-notification-inbox-10000-instrumentation",
+    "screenshot": "android-notification-inbox-b7f554c.png",
+    "screenshot_sha256": "d3d005fbdcab65b59a76ef6cd6d682ef062548e9f939446a3ad947f8a4e4c548",
+    "app_version": "0.3.1 development branch; not final 0.4.0 binary"
+  }
+}

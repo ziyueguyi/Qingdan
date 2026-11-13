@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 status=0
+adb shell rm -f /sdcard/Download/qingdan-notification-inbox.png
 gradle -p android connectedEmulatorDebugAndroidTest --stacktrace || status=$?
 diagnostics=android/app/build/reports/androidTests/diagnostics
 mkdir -p "$diagnostics"
-if ! adb pull /sdcard/Android/data/com.ziyueguyi.qingdan/files/android-ui.png "$diagnostics/android-ui.png"; then
+if adb pull /sdcard/Download/qingdan-notification-inbox.png "$diagnostics/android-ui.png"; then
+  printf '%s\n' 'native-notification-inbox-10000-instrumentation' > "$diagnostics/screenshot-source.txt"
+elif ! adb pull /sdcard/Android/data/com.ziyueguyi.qingdan/files/android-ui.png "$diagnostics/android-ui.png"; then
   # AGP normally uninstalls test applications, including their external files.
   # Reopen the built debug APK for a genuine native screenshot after cleanup.
   apk=$(find android/app/build/outputs/apk/emulator/debug -name '*.apk' -print -quit)

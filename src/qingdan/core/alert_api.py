@@ -23,6 +23,60 @@ def _need_channel(name: str):
     return ch
 
 
+@feature(name='alert.notification_action', group='alert',
+         http=('POST','/api/v1/alert/notification-action'), undoable=True)
+def notification_action(item_id: str, action: str = 'open',
+                        expected_rev: dict | None = None, minutes: int = 10) -> dict:
+    """Local notification callback; stale versions can open, never mutate."""
+    if action=='open':
+        return _notification_action(item_id,action,expected_rev,minutes)
+    with ctx.need_store().atomic_write():
+        return _notification_action(item_id,action,expected_rev,minutes)
+
+
+def _notification_action(item_id,action,expected_rev,minutes):
+    if action not in ('open','complete','snooze','dismiss'):
+        raise validation_error('action 只能是 open|complete|snooze|dismiss')
+    if action != 'open':
+        if (not isinstance(expected_rev,dict) or set(expected_rev) != {'ms','seq','dev'}
+                or type(expected_rev['ms']) is not int or type(expected_rev['seq']) is not int
+                or not isinstance(expected_rev['dev'],str) or not expected_rev['dev']):
+            raise validation_error('修改通知任务必须提供完整 expected_rev')
+    if action == 'snooze' and not 1 <= minutes <= 1440:
+        raise validation_error('minutes 需在 1..1440')
+    from qingdan.core import notification_inbox
+    if action == 'dismiss':
+        count=notification_inbox.acknowledge(ctx.need_store(),item_id,expected_rev)
+        return {'status':'dismissed','item_id':item_id,'inbox_total':count}
+    item = ctx.need_store().get(item_id)
+    if item is None or item.deleted or item.kind not in ('task','countdown'):
+        return {'status':'gone','item_id':item_id}
+    result = {'item_id':item_id,'kind':item.kind,'revision':item.rev.to_json()}
+    if action == 'open':
+        return {**result,'status':'open'}
+    if item.kind != 'task':
+        return {**result,'status':'unsupported'}
+    if item.data.get('status') in ('done','cancelled'):
+        return {**result,'status':'inactive'}
+    if item.rev.to_json() != expected_rev:
+        return {**result,'status':'stale'}
+    # The caller holds operation_lock and SQLite's write reservation across the
+    # check and mutation. Do not nest registry.call or replace the undo preimage.
+    from qingdan.core.service import task_complete, task_snooze
+    changed = task_complete(item_id) if action == 'complete' else task_snooze(item_id,minutes)
+    count=notification_inbox.acknowledge(ctx.need_store(),item_id,expected_rev)
+    return {**result,'revision':ctx.need_store().get(item_id).rev.to_json(),
+            'status':'completed' if action == 'complete' else 'snoozed',
+            'inbox_total':count,
+            'rolled':bool((changed.get('repeat_roll') or {}).get('rolled'))}
+
+
+@feature(name='alert.notification_list',group='alert',http=('GET','/api/v1/alert/notifications'),idempotent=True)
+def notification_list(limit: int = 50,offset: int = 0) -> dict:
+    from qingdan.core.notification_inbox import query
+    return query(ctx.need_store(),limit,offset)
+
+
 @feature(name="alert.status", group="alert", http=("GET", "/api/v1/alert/status"), idempotent=True)
 def alert_status() -> dict:
     """当前生效状态：待触发数、各渠道配置/开关情况、最近一次扫描结果。"""

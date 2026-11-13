@@ -29,6 +29,7 @@ class AlertMessage:
     priority: int = 4
     overdue: bool = False
     days_left: int | None = None    # 倒数日专用
+    revision: dict | None = None   # Local notification actions bind to this Item version.
 
     def line(self) -> str:
         if self.kind == "countdown" and self.days_left is not None:

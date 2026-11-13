@@ -424,8 +424,16 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
 .catalog-row .nav{height:34px}
 .catalog-row .list-edit{opacity:1;width:22px;font-size:17px}
 .field .compact-repeat{flex:0 0 auto;width:calc(3em + 28px);min-width:0;padding-left:6px;padding-right:4px}
-.rule-dialog{padding:0;width:430px;max-width:calc(100vw - 32px);max-height:80vh;overflow:auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.rule-dialog{margin:auto;padding:0;width:430px;max-width:calc(100vw - 32px);max-height:80vh;overflow:auto;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 .rule-dialog::backdrop{background:rgba(0,0,0,.25)}
+.task-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0;color:var(--text-3);font-size:12px}
+.task-pager>span{text-align:center;overflow-wrap:anywhere}
+.task-pager>.btn{flex-shrink:0}
+.board .col{display:flex;flex-direction:column;max-height:calc(100dvh - 230px);flex-shrink:0}
+.board .col h4{flex:none}
+.board-cards{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.board-card-pager{display:flex;align-items:center;justify-content:space-between;gap:5px;flex:none;padding:0 4px 8px;color:var(--text-3);font-size:11px}
+.board-card-pager>span{min-width:0;text-align:center;overflow-wrap:anywhere}
 .rule-dialog .field>label{width:100px}
 .rule-dialog .ctl{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:6px;border-radius:var(--radius-s)}
 #rule-raw{width:100%;box-sizing:border-box;resize:vertical}
@@ -548,3 +556,10 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
   .settings-content .api-token-row{flex-wrap:wrap}
   .settings-content .api-token-name{flex-basis:100%}
 }
+.calendar-more{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text-3);cursor:pointer}
+.calendar-day-events{max-height:55dvh;overflow-y:auto;overscroll-behavior:contain;margin-top:12px}
+.calendar-day-event{display:block;width:100%;text-align:left;margin-bottom:6px;white-space:normal;overflow-wrap:anywhere}
+.notification-events{max-height:55dvh;overflow-y:auto;overscroll-behavior:contain}
+.notification-event{padding:10px 0;border-bottom:1px solid var(--line)}
+.notification-event>button{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.notification-event .btnrow{margin-top:8px;flex-wrap:wrap}

@@ -47,7 +47,7 @@ def reminder_times(item) -> list[int]:
         return [int(fire.timestamp() * 1000)]
 
     snooze = view.parse_dt(d.get("snoozed_until"))
-    if snooze and snooze > stamp.now_dt():
+    if snooze:
         return [int(snooze.timestamp() * 1000)]
 
     times = [view.parse_dt(x) for x in (d.get("remind_at") or [])]
@@ -114,7 +114,7 @@ def _enabled_channels():
 
 def _to_message(job) -> AlertMessage | None:
     item = _store().get(job["item_id"])
-    if item is None or item.deleted:
+    if item is None or item.deleted or item.data.get('status') in ('done','cancelled'):
         return None
     d = item.data
     when = datetime.fromtimestamp(job["fire_at"] / 1000)
@@ -130,6 +130,7 @@ def _to_message(job) -> AlertMessage | None:
         priority=int(d.get("priority") or 4),
         overdue=overdue,
         days_left=view.days_between(d.get("target_date"), today) if item.kind == "countdown" else None,
+        revision=item.rev.to_json(),
     )
 
 

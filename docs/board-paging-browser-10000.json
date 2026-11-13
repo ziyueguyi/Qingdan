@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-13",
+  "method": "Chrome DevTools observations in an isolated HTTP review database",
+  "tasks": 10000,
+  "columns_total": 40,
+  "cards_per_column_total": 250,
+  "visible_columns": 5,
+  "visible_cards_per_column": 20,
+  "dom_cards": 100,
+  "prefetch": {"next_column_offset": 5, "next_card_offset_for_each_visible_column": 20},
+  "single_column_flip": {
+    "ms": 54.1,
+    "offset": 20,
+    "horizontal_scroll_before": 650,
+    "horizontal_scroll_after": 650,
+    "other_column_scroll_before": 120,
+    "other_column_scroll_after": 120,
+    "target_column_scroll_after": 0
+  },
+  "scroll_to_next_card_page": {"offset": 40, "dom_cards": 100, "horizontal_scroll": 650},
+  "column_group_flip": {
+    "ms": 37.9,
+    "offset": 5,
+    "keys": ["BoardGroup05", "BoardGroup06", "BoardGroup07", "BoardGroup08", "BoardGroup09"],
+    "dom_columns": 5,
+    "dom_cards": 100,
+    "horizontal_scroll_after": 0
+  },
+  "external_edit": {
+    "token_before": 10046,
+    "token_after": 10047,
+    "columns_offset_after": 0,
+    "all_card_offsets_after": 0,
+    "edited_title_visible": true,
+    "dom_cards": 100
+  },
+  "cold_board_statistics": {"open_total": 10000, "due_today": 10000, "overdue": 0, "done_today": 0},
+  "limitations": [
+    "Desktop browser HTTP observations, not Android native or physical-device performance.",
+    "Timings are local samples, not CI thresholds."
+  ]
+}

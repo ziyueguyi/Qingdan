@@ -8,7 +8,8 @@ import { catalogs, catalogItems, subscribeCatalog, scrollCatalog, PAGE_SIZE, ROW
 import { configureAccessUI, loadAccess, renderAccessTab, renderCliTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
 import { call, ApiError, hasFeature, loadFeatures, featureCount } from "./api.js";
 import { t, setLang, locale } from "./i18n.js";
-import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError } from "./store.js";
+import { TaskPager } from "./task_pages.js";
+import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError, changeTaskPage, changeBoardPage } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -18,6 +19,34 @@ const PC = { 1: "var(--p1)", 2: "var(--p2)", 3: "var(--p3)", 4: "var(--text-3)" 
 const PL = { 1: "p_top", 2: "p_med", 3: "p_low", 4: "p_none" };
 const REPEAT_LABEL = { daily: "rp_daily", weekly: "rp_weekly", monthly: "rp_monthly", yearly: "rp_yearly" };
 const SWATCHES = ["#e5484d", "#e8912d", "#3b82f6", "#0f9d8e", "#7457e8"];
+
+let openingNotification = false;
+async function openPendingNotification() {
+  const bridge=globalThis.QingdanAndroid || globalThis.pywebview?.api;
+  if (openingNotification || !state.booted || !bridge?.takeNotification) return;
+  openingNotification = true;
+  try {
+    const raw = await bridge.takeNotification();
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    // Activity extras can be supplied externally: navigation always forces open,
+    // and never executes an action or trusts a caller-supplied feature name.
+    if (!$('mask').hidden && !confirm(t('notification_leave_dialog'))) return;
+    if (payload.inbox === true) { await openNotificationInbox(); return; }
+    if (typeof payload.item_id !== 'string') return;
+    const target = await call('alert.notification_action',{item_id:payload.item_id,action:'open'});
+    if (target.status === 'gone') { showError(new Error(t('notification_gone'))); return; }
+    if (target.status !== 'open') return;
+    clearAccessSecret();
+    $('mask').hidden = true;
+    if (target.kind === 'countdown') await openCountdownDialog(target.item_id);
+    else {
+      if(globalThis.QingdanAndroid)$('app').classList.add('phone-detail');
+      await select(target.item_id);
+    }
+  } catch(error) { showError(error); }
+  finally { openingNotification = false; }
+}
 
 // --------------------------------------------------------------------------- 时间
 
@@ -55,6 +84,7 @@ function dueClass(iso) {
 
 const groupName = (id) => (state.groups.find((g) => g.id === id) || {}).data?.name || state.groupNames[id] || "";
 const repeatLabel = (v) => (REPEAT_LABEL[v] ? t(REPEAT_LABEL[v]) : v);
+let boardRestoring = false, boardRestoreSequence = 0;
 
 // --------------------------------------------------------------------------- 渲染
 
@@ -171,10 +201,11 @@ function renderToolbar() {
   const seg = [["list", "layout_list"], ["board", "layout_board"], ["calendar", "layout_calendar"]]
     .map(([v, k]) => `<button class="${state.layout === v ? "on" : ""}" data-act="layout" data-v="${v}">${esc(t(k))}</button>`)
     .join("");
-  // 「按清单」分组随清单界面一起移除；老偏好里若还存着 group，显示时回落到按日期
-  const groupVal = state.group;
-  const groups = [["none", "g_none"], ["date", "g_date"],
-                  ["priority", "g_prio"], ["tag", "g_tag2"], ["group", "g_list"]]
+  const choices = state.layout === "board"
+    ? [["status","g_status"],["group","g_list"],["priority","g_prio"]]
+    : [["none","g_none"],["date","g_date"],["priority","g_prio"],["tag","g_tag2"],["group","g_list"],["status","g_status"]];
+  const groupVal = state.layout === "board" && !choices.some(([value])=>value===state.group) ? "status" : state.group;
+  const groups = choices
     .map(([v, k]) => `<option value="${v}" ${groupVal === v ? "selected" : ""}>${esc(t(k))}</option>`)
     .join("");
   const sorts = [["smart", "s_smart"], ["due", "s_due"], ["priority", "s_prio"],
@@ -239,9 +270,28 @@ function emptyKey() {
 
 function renderMain() {
   const el = $("scroll");
+  const oldQuick = $("quickadd"), draft = oldQuick?.value, draftDue = oldQuick?.dataset.due;
+  const focused = oldQuick && document.activeElement === oldQuick;
+  const selection = focused ? [oldQuick.selectionStart, oldQuick.selectionEnd] : null;
   if (!state.booted) { el.innerHTML = `<div class="loading">${esc(t("booting"))}</div>`; return; }
-  if (state.layout === "board") { el.innerHTML = renderBoard(); return; }
-  if (state.layout === "calendar") { el.innerHTML = renderCalendar(); return; }
+  if (state.layout === "board" && !state.searchQ) {
+    const previous = el.querySelector('.board');
+    const horizontal = previous?.scrollLeft || 0, windowKey = previous?.dataset.window;
+    const positions = new Map([...el.querySelectorAll('.board-cards')].map(node=>[node.dataset.column,{offset:node.dataset.pageOffset,top:node.scrollTop}]));
+    el.innerHTML = renderBoard();
+    const current = el.querySelector('.board');
+    if (current && current.dataset.window===windowKey) {
+      boardRestoring=true;const sequence=++boardRestoreSequence;
+      current.scrollLeft=horizontal;
+      for (const node of current.querySelectorAll('.board-cards')) {
+        const before=positions.get(node.dataset.column);
+        if (before?.offset===node.dataset.pageOffset) node.scrollTop=before.top;
+      }
+      requestAnimationFrame(()=>{if(sequence===boardRestoreSequence)boardRestoring=false;});
+    }
+    return;
+  }
+  if (state.layout === "calendar" && !state.searchQ) { el.innerHTML = renderCalendar(); return; }
 
   let html = "";
   if (state.view === "today" && state.countdowns.length) html += renderCountdownBanner();
@@ -249,18 +299,50 @@ function renderMain() {
   if (state.searchQ) html += `<div class="sec-h">${esc(t("search_results", { q: state.searchQ }))}
                               <button class="btn" data-act="clear-search">${esc(t("back_to_view"))}</button><span class="line"></span></div>`;
 
-  if (state.layout === "list" && state.group !== "none") {
+  html += renderTaskPager();
+  if (state.layout === "list" && state.group !== "none" && state.buckets.length) {
     for (const b of state.buckets) {
       html += `<div class="sec-h ${b.key === "sec_overdue" ? "late" : ""}">${esc(bucketLabel(b))}<span class="line"></span></div>` +
         b.items.map(taskRow).join("");
     }
   } else {
-    html += state.tasks.map(taskRow).join("");
+    html += state.tasks.map(state.searchQ ? searchRow : taskRow).join("");
   }
   if (!state.tasks.length) {
     html += `<div class="empty">${esc(t(emptyKey()))}</div>`;
   }
+  html += renderTaskPager();
   el.innerHTML = html;
+  const quick = $("quickadd");
+  if (quick && draft !== undefined) {
+    quick.value = draft; quick.dataset.due = draftDue || "";
+    if (focused) { quick.focus({preventScroll:true}); quick.setSelectionRange(...selection); }
+  }
+}
+
+function searchRow(item) {
+  if (item.kind === "task") return taskRow(item);
+  const d = item.data;
+  const kinds = {list:"kind_list",tag:"kind_tag",filter:"kind_filter",folder:"kind_folder",section:"kind_section",note:"kind_note",countdown:"kind_countdown"};
+  const destination = item.kind === "list" ? "group:" + item.id
+    : item.kind === "tag" ? "tag:" + d.name
+    : item.kind === "filter" ? "filter:" + item.id
+    : item.kind === "section" && d.list_id ? "group:" + d.list_id : null;
+  const action = destination ? `data-act="view" data-view="${esc(destination)}"`
+    : item.kind === "countdown" ? `data-act="open-countdown" data-id="${esc(item.id)}"`
+    : item.kind === "note" && d.parent_id ? `data-act="open" data-id="${esc(d.parent_id)}"` : "";
+  return `<div class="task search-result" ${action}><div class="body"><div class="ttl">${esc(d.name || d.title || d.text || item.id)}</div><div class="meta">${esc(kinds[item.kind] ? t(kinds[item.kind]) : item.kind)}</div></div></div>`;
+}
+
+function renderTaskPager() {
+  const page = state.taskPage;
+  if (!page) return "";
+  const disabled = page.loading || state.busy;
+  return `<nav class="task-pager" aria-label="${esc(t("task_pages"))}">
+    <button class="btn" data-act="task-page" data-v="-1" ${disabled || !page.offset ? "disabled" : ""}>${esc(t("previous_page"))}</button>
+    <span role="status">${esc(page.loading ? t("task_page_loading") : t("task_page_range", {start:page.total ? page.offset+1 : 0,end:Math.min(page.offset+state.tasks.length,page.total),total:page.total,page:page.total ? Math.floor(page.offset/page.limit)+1 : 0,pages:Math.ceil(page.total/page.limit)}))}</span>
+    <button class="btn" data-act="task-page" data-v="1" ${disabled || !page.has_more ? "disabled" : ""}>${esc(t("next_page"))}</button>
+  </nav>`;
 }
 
 function renderCountdownBanner() {
@@ -277,13 +359,15 @@ function renderCountdownBanner() {
 function renderBoard() {
   const b = state.board;
   if (!b || !b.columns.length) return `<div class="empty">${esc(t("empty_list"))}</div>`;
-  return `<div class="board">` + b.columns.map((c) =>
+  const controls = `<nav class="task-pager" aria-label="${esc(t("board_columns"))}"><button class="btn" data-act="board-columns" data-v="-1" ${b.columns_loading || !b.columns_offset ? "disabled" : ""}>${esc(t("previous_page"))}</button><span>${esc(b.columns_loading ? t("task_page_loading") : t("board_column_range",{start:b.columns_offset+1,end:b.columns_offset+b.columns.length,total:b.columns_total}))}</span><button class="btn" data-act="board-columns" data-v="1" ${b.columns_loading || !b.columns_has_more ? "disabled" : ""}>${esc(t("next_page"))}</button></nav>`;
+  return controls + `<div class="board" data-window="${b.window}">` + b.columns.map((c) =>
     `<div class="col"><h4>${esc(bucketLabel(c))}<span>${c.total}</span></h4>` +
+    `<nav class="board-card-pager" aria-label="${esc(t("board_card_pages",{column:bucketLabel(c)}))}"><button class="iconbtn" data-act="board-cards" data-k="${esc(c.key)}" data-v="-1" title="${esc(t("previous_page"))}" ${c.loading || b.columns_loading || !c.offset ? "disabled" : ""}>‹</button><span>${esc(c.loading ? t("task_page_loading") : t("board_card_range",{start:c.total ? c.offset+1 : 0,end:Math.min(c.offset+c.items.length,c.total),total:c.total}))}</span><button class="iconbtn" data-act="board-cards" data-k="${esc(c.key)}" data-v="1" title="${esc(t("next_page"))}" ${c.loading || b.columns_loading || !c.has_more ? "disabled" : ""}>›</button></nav><div class="board-cards" data-column="${esc(c.key)}" data-page-offset="${c.offset}">` +
     c.items.map((it) => `<div class="card ${state.selected === it.id ? "on" : ""}"
        data-act="open" data-id="${esc(it.id)}">
        ${it.data.priority < 4 ? `<span style="color:${esc(PC[it.data.priority])}">⚑</span> ` : ""}${esc(it.data.title)}
        <div class="meta">${it.data.due_at ? `<span class="${dueClass(it.data.due_at)}">${esc(fmtDue(it.data.due_at))}</span>` : ""}</div>
-     </div>`).join("") + "</div>").join("") + "</div>";
+     </div>`).join("") + "</div></div>").join("") + "</div>";
 }
 
 function renderCalendar() {
@@ -295,14 +379,14 @@ function renderCalendar() {
       data-act="cal-day" data-date="${esc(c.date)}"><b>${esc(c.date.slice(-2))}</b>` +
     c.events.slice(0, 3).map((e) => `<div class="ev ${e.occurrence ? "rec" : ""}" style="--ec:${esc(e.color || PC[e.priority] || "var(--accent)")}"
         data-act="${e.kind === "countdown" ? "open-countdown" : "open"}" data-id="${esc(e.id)}">${e.occurrence ? "↻ " : ""}${esc(e.title)}</div>`).join("") +
-    (c.events.length > 3 ? `<div class="ev" style="--ec:var(--text-3)">+${c.events.length - 3}</div>` : "") +
+    (c.count > c.events.length ? `<button class="ev calendar-more" data-act="cal-events" data-date="${esc(c.date)}" title="${esc(t('calendar_events'))}">+${c.count-c.events.length}</button>` : "") +
     "</div>").join("");
   return `<div style="display:flex;align-items:center;gap:10px;padding-top:12px">
       <button class="iconbtn" data-act="cal-month" data-v="-1" title="${esc(t("cal_prev"))}">‹</button>
       <b>${esc(new Intl.DateTimeFormat(locale(), {year:"numeric",month:"long"}).format(new Date(cal.month + "T12:00:00")))}</b>
       <button class="iconbtn" data-act="cal-month" data-v="1" title="${esc(t("cal_next"))}">›</button>
       <button class="btn" data-act="cal-today">${esc(t("today"))}</button></div>
-      <div class="cal">${wd.map((w) => `<div class="hd">${esc(w)}</div>`).join("")}${cells}</div>`;
+      ${(cal.warnings||[]).map(w=>`<p role="status">${esc(t(w.key,w))}</p>`).join('')}<div class="cal">${wd.map((w) => `<div class="hd">${esc(w)}</div>`).join("")}${cells}</div>`;
 }
 
 function renderStatusbar() {
@@ -317,7 +401,7 @@ function renderStatusbar() {
     `<span class="st-l">${esc(t(key))}</span><b>${value}</b></span>`;
   const modeKey = authed ? "sync_on" : "sync_off";
   $("statusbar").innerHTML = `
-    ${item("▤", "status_items", h.items ?? "-")}
+    ${item("▤", "status_items", h.tasks ?? "-")}
     ${item("⚠", "status_overdue", s.overdue ?? "-", (s.overdue ?? 0) > 0 ? "bad" : "")}
     ${item("📅", "today", s.due_today ?? "-")}
     ${item("☑", "status_done", s.done_today ?? "-")}
@@ -429,11 +513,13 @@ async function fillRepeatInfo(id) {
     if (s.monthdays && s.monthdays.length) parts.push(t("rp_on_days", { d: s.monthdays.join(", ") }));
     if (s.until) parts.push(t("rp_until", { d: s.until }));
     if (s.count) parts.push(t("rp_count", { n: s.count }));
+    if (s.workday) parts.push(t(s.workday === "SKIP" ? "rp_workday_skip" : "rp_workday_next"));
     const h = info.history || {};
     const up = info.upcoming || [];
     box.innerHTML = `
       ${info.needs_due_key ? `<div class="hint warn">${esc(t(info.needs_due_key))}</div>` : ""}
       ${info.invalid_rule_key ? `<div class="hint warn">${esc(t(info.invalid_rule_key))}</div>` : ""}
+      ${(info.warnings || []).map(w=>`<div class="hint warn">${esc(t(w.key, w))}</div>`).join("")}
       <div class="row"><span class="k">${esc(t("rp_rule"))}</span>
         <span class="v">${esc(parts.filter(Boolean).join(" · ") || t("rp_none"))}</span></div>
       <div class="row"><span class="k">${esc(t("rp_next"))}</span>
@@ -488,9 +574,82 @@ function snackbar(text, undoFeature) {
 function openModal(html, fixed = false) {
   $('modal').classList.remove('settings-modal');
   const m = $("modal");
+  delete m.dataset.calendarDay;
+  delete m.dataset.notificationInbox;
   m.innerHTML = html;
   m.classList.toggle("fixed", fixed);
   $("mask").hidden = false;
+}
+
+let notificationInbox=null;
+async function openNotificationInbox(offset=0,reset=false){
+  const modal=$('modal');
+  if(!notificationInbox || $('mask').hidden || modal.dataset.notificationInbox!==notificationInbox.key){
+    notificationInbox={key:String(Date.now())+'-'+Math.random(),pager:new TaskPager(call),loading:false,offset:0};
+    openModal(`<div class="mh">${esc(t('notification_inbox'))}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb">${esc(t('task_page_loading'))}</div>`);
+    modal.dataset.notificationInbox=notificationInbox.key;
+  }
+  const context=notificationInbox;
+  if(context.loading)return;
+  context.loading=true;
+  const active=()=>notificationInbox===context&&!$('mask').hidden&&modal.dataset.notificationInbox===context.key;
+  modal.querySelectorAll('button').forEach(b=>{if(b.dataset.act!=='close-modal')b.disabled=true;});
+  try{
+    let page;
+    for(let attempt=0;attempt<3;attempt++){
+      const health=await call('app.health');
+      if(!active())return;
+      const changed=context.pager.configure('alert.notification_list',{},[health.task_token,health.notification_token]);
+      if(changed||reset)offset=0;
+      try{page=await context.pager.get(offset);break;}catch(error){if(error.code!=='PAGE_CHANGED'||attempt===2)throw error;}
+    }
+    if(!active())return;
+    context.offset=page.offset;context.page=page;
+    const nav=`<nav class="task-pager"><button class="btn" data-act="notification-page" data-v="-1" ${!page.offset?'disabled':''}>${esc(t('previous_page'))}</button><span>${esc(t('board_card_range',{start:page.total?page.offset+1:0,end:page.offset+page.items.length,total:page.total}))}</span><button class="btn" data-act="notification-page" data-v="1" ${!page.has_more?'disabled':''}>${esc(t('next_page'))}</button></nav>`;
+    modal.innerHTML=`<div class="mh">${esc(t('notification_inbox'))}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb">${nav}<div class="notification-events">${page.items.map(item=>`<div class="notification-event"><button class="btn" data-act="notification-open" data-id="${esc(item.id)}" ${item.status==='gone'?'disabled':''}>${esc(item.title||t('notification_gone'))}</button>${item.status!=='open'?`<p>${esc(t('notification_'+item.status))}</p>`:''}<div class="btnrow">${item.kind==='task'&&item.status==='open'?`<button class="btn" data-act="notification-action" data-id="${esc(item.id)}" data-v="complete" data-rev="${esc(JSON.stringify(item.expected_rev))}">${esc(t('complete'))}</button><button class="btn" data-act="notification-action" data-id="${esc(item.id)}" data-v="snooze" data-rev="${esc(JSON.stringify(item.expected_rev))}">${esc(t('notification_snooze'))}</button>`:''}<button class="btn" data-act="notification-action" data-id="${esc(item.id)}" data-v="dismiss" data-rev="${esc(JSON.stringify(item.expected_rev))}">${esc(t('notification_dismiss'))}</button></div></div>`).join('')||`<p>${esc(t('empty_list'))}</p>`}</div></div>`;
+    context.pager.warm(offset,page);
+  }catch(error){if(active()){showError(error);modal.querySelector('.mb').innerHTML=`<button class="btn" data-act="notification-inbox">${esc(t('retry'))}</button>`;}}
+  finally{context.loading=false;}
+}
+
+let calendarDay = null;
+async function openCalendarDay(date, offset = 0) {
+  const modal = $('modal');
+  if (!calendarDay || $('mask').hidden || calendarDay.date !== date || modal.dataset.calendarDay !== calendarDay.key) {
+    const query = {...state.calendar.query,start:date,days:1};
+    delete query.limit;
+    calendarDay = {date,query,pager:new TaskPager(call),key:String(Date.now())+'-'+Math.random(),sequence:0};
+    openModal(`<div class="mh">${esc(date)}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb" role="status">${esc(t('task_page_loading'))}</div>`);
+    modal.dataset.calendarDay = calendarDay.key;
+  }
+  const context = calendarDay;
+  if (context.loading) return;
+  context.loading = true;
+  const sequence = ++context.sequence;
+  const active = () => calendarDay === context && context.sequence === sequence && !$('mask').hidden && modal.dataset.calendarDay === context.key;
+  modal.querySelectorAll('[data-act="cal-page"]').forEach(button=>button.disabled=true);
+  try {
+    let page;
+    for (let attempt=0;attempt<3;attempt++) {
+      const health = await call('app.health');
+      if (!active()) return;
+      const changed = context.pager.configure('view.calendar',{...context.query,today:health.today},health.task_token);
+      if (changed) offset = 0;
+      try { page = await context.pager.get(offset); break; }
+      catch(error) { if (error.code !== 'PAGE_CHANGED' || attempt === 2) throw error; }
+    }
+    if (!active()) return;
+    context.offset = page.offset;
+    context.page = page;
+    modal.innerHTML = `<div class="mh">${esc(date)}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb"><button class="btn" data-act="cal-day" data-date="${esc(date)}">+ ${esc(t('new_task'))}</button>${(page.warnings||[]).map(w=>`<p role="status">${esc(t(w.key,w))}</p>`).join('')}<nav class="task-pager"><button class="btn" data-act="cal-page" data-v="-1" ${!page.offset?'disabled':''}>${esc(t('previous_page'))}</button><span>${esc(t('board_card_range',{start:page.total?page.offset+1:0,end:page.offset+page.items.length,total:page.total}))}</span><button class="btn" data-act="cal-page" data-v="1" ${!page.has_more?'disabled':''}>${esc(t('next_page'))}</button></nav><div class="calendar-day-events">${page.items.map(event=>`<button class="btn calendar-day-event" data-act="cal-event-open" data-id="${esc(event.id)}" data-kind="${esc(event.kind)}">${event.occurrence?'↻ ':''}${esc(event.title)}</button>`).join('')||`<p>${esc(t('empty_list'))}</p>`}</div></div>`;
+    context.pager.warm(offset,page);
+  } catch(error) {
+    if (active()) {
+      showError(error);
+      modal.querySelectorAll('[data-act="cal-page"]').forEach(button=>button.disabled=false);
+      if (!context.page) modal.querySelector('.mb').innerHTML = `<button class="btn" data-act="cal-events" data-date="${esc(date)}">${esc(t('calendar_events'))}</button>`;
+    }
+  } finally { context.loading = false; }
 }
 
 
@@ -606,7 +765,8 @@ function renderAlertTab() {
         <span class="desc">${esc(t("digest_d"))}</span></div></div>
     <div class="field"><label></label><div class="ctl" style="display:flex;gap:8px">
       <button class="btn" data-act="alert-silence">🔕 ${esc(t("bell_off"))} 30min</button>
-      <button class="btn" data-act="alert-preview">👁 ${esc(t("nav_stat"))}</button></div></div>
+      <button class="btn" data-act="alert-preview">👁 ${esc(t("nav_stat"))}</button>
+      <button class="btn" data-act="notification-inbox">${esc(t('notification_inbox'))}</button></div></div>
     <div class="group-t" style="margin-top:14px">${esc(t("alert_log_t"))}</div>
     <div class="field"><label></label><div class="ctl">
       <button class="btn" data-act="alert-log">${esc(t("alert_log_btn"))}</button>
@@ -1130,8 +1290,13 @@ async function onClick(ev) {
       await saveViewPrefs(); await loadAll();
       break;
     case "clear-search": patch({ searchQ: "" }); $("q").value = ""; await loadAll(); break;
-    case "layout":
-      patch({ layout: v }); await saveViewPrefs(); await loadAll(); break;
+    case "task-page": await changeTaskPage(Number(v)); break;
+    case "board-cards": await changeBoardPage(k,Number(v)); break;
+    case "board-columns": await changeBoardPage(null,Number(v)); break;
+    case "layout": {
+      const group = v === "board" && !["status","group","priority"].includes(state.group) ? "status" : state.group;
+      patch({ layout: v, group }); await saveViewPrefs(); await loadAll(); break;
+    }
     case "reverse":
       patch({ reverse: !state.reverse }); await saveViewPrefs(); await loadAll(); break;
     case "open": if(globalThis.QingdanAndroid)document.getElementById('app').classList.add('phone-detail');select(id); break;
@@ -1230,6 +1395,7 @@ async function onClick(ev) {
     case "rule-open": openRuleDialog(); break;
     case "rule-cancel": cancelRuleDialog(); break;
     case "rule-save": await saveRuleDialog(); break;
+    case "rule-preview": await previewRuleDialog(); break;
     case "task-save": await taskDialogSave(id || null); break;
     case "data-import": $("import-file")?.click(); break;
     case "alert-log": {
@@ -1292,6 +1458,13 @@ async function onClick(ev) {
       break;
     }
     case "cal-today": patch({ calendarMonth: null }); await loadAll(); break;
+    case "cal-events": await openCalendarDay(date); break;
+    case "cal-page": await openCalendarDay(calendarDay.date,calendarDay.offset+Number(v)*50); break;
+    case "cal-event-open":
+      $('mask').hidden = true;
+      if (el.dataset.kind === 'countdown') await openCountdownDialog(id);
+      else { if(globalThis.QingdanAndroid)$('app').classList.add('phone-detail'); await select(id); }
+      break;
     case "cal-day": {
       await openTaskDialog(null, { due_at: defaultDueText(new Date(), date), due_all_day: false });
       break;
@@ -1361,6 +1534,26 @@ async function onClick(ev) {
     case "alert-digest": await alertSave({ digest: { enabled: !state.alertConfig.digest.enabled } }); break;
     case "alert-test": await alertTest(name); break;
     case "alert-preview": await alertPreview(); break;
+    case "notification-inbox": await openNotificationInbox(); break;
+    case "notification-page": await openNotificationInbox(notificationInbox.offset+Number(v)*50); break;
+    case "notification-open": {
+      const target=await call('alert.notification_action',{item_id:id,action:'open'});
+      if(target.status==='gone'){showError(new Error(t('notification_gone')));break;}
+      $('mask').hidden=true;
+      if(target.kind==='countdown')await openCountdownDialog(id);
+      else{if(globalThis.QingdanAndroid)$('app').classList.add('phone-detail');select(id);}
+      break;
+    }
+    case "notification-action": {
+      el.disabled=true;
+      try{
+        const result=await call('alert.notification_action',{item_id:id,action:v,expected_rev:JSON.parse(el.dataset.rev),minutes:10});
+        if(!['completed','snoozed','dismissed'].includes(result.status))showError(new Error(t('notification_'+result.status)));
+        await openNotificationInbox(0,true);
+        if(v!=='dismiss')await loadAll();
+      }finally{if(el.isConnected)el.disabled=false;}
+      break;
+    }
     case "alert-silence":
       try { await call("alert.silence", { minutes: 30 }); snackbar(t("bell_off"), false); }
       catch (e) { showError(e); }
@@ -1433,7 +1626,8 @@ async function onKeydown(ev) {
     if (!text) return;
     const due = ev.target.dataset.due;
     await addQuickAdd(due ? `${due} ${text}` : text);
-    ev.target.value = ""; ev.target.dataset.due = "";
+    const quick = $("quickadd");
+    if (quick && quick.value.trim() === text) { quick.value = ""; quick.dataset.due = ""; }
     const p = $("qa-preview"); if (p) p.innerHTML = "";
     return;
   }
@@ -1540,13 +1734,15 @@ async function openTaskDialog(id, defaults = {}) {
     $("tk-repeat").dataset.previous = $("tk-repeat").value;
   };
   setTaskAllDay(allDayChecked);
+  const taskTitleInput = $('tk-title'), priorityButtons = $('tk-prio');
   await mountGroupPicker("tk-list-picker", "tk-list", d.list_id || "");
+  if (!taskTitleInput.isConnected || $('tk-title') !== taskTitleInput) return;
   // 优先级是一组互斥按钮：点谁谁亮，取值时读 .on
-  $("tk-prio").querySelectorAll("[data-prio]").forEach((b) => {
-    b.onclick = () => $("tk-prio").querySelectorAll("[data-prio]")
+  priorityButtons.querySelectorAll("[data-prio]").forEach((b) => {
+    b.onclick = () => priorityButtons.querySelectorAll("[data-prio]")
       .forEach((x) => x.classList.toggle("on", x === b));
   });
-  setTimeout(() => $("tk-title")?.focus(), 0);
+  setTimeout(() => { if(taskTitleInput.isConnected) taskTitleInput.focus(); }, 0);
 }
 
 async function mountGroupPicker(containerId, selectId, initial) {
@@ -1586,7 +1782,12 @@ function setTaskAllDay(enabled) {
   input.value = value ? (enabled ? value.slice(0,10) : value.length === 10 ? value + "T09:00" : value) : "";
 }
 
-function openRuleDialog() {
+async function openRuleDialog() {
+  const taskRepeat = $("tk-repeat");
+  let calendar;
+  try { calendar = (await call("app.info")).workday_calendar; }
+  catch (error) { showError(error); return; }
+  if (!taskRepeat?.isConnected || taskRepeat !== $("tk-repeat")) return;
   let dialog = $("rule-dialog");
   if (!dialog) {
     dialog = document.createElement("dialog"); dialog.id = "rule-dialog"; dialog.className = "rule-dialog";
@@ -1606,11 +1807,14 @@ function openRuleDialog() {
       <div class="field"><label>${esc(t("rp_end_label"))}</label><select class="ctl" id="rule-end"><option value="never">${esc(t("rp_end_never"))}</option><option value="date" ${fields.UNTIL ? "selected" : ""}>${esc(t("rp_end_date"))}</option><option value="count" ${fields.COUNT ? "selected" : ""}>${esc(t("rp_end_count"))}</option></select></div>
       <div class="field" id="rule-until-row" ${fields.UNTIL ? "" : "hidden"}><label>${esc(t("d_due"))}</label><input class="ctl" id="rule-until" type="date" value="${esc((fields.UNTIL || "").replace(/^(\d{4})(\d{2})(\d{2}).*$/, "$1-$2-$3"))}"></div>
       <div class="field" id="rule-count-row" ${fields.COUNT ? "" : "hidden"}><label>${esc(t("rp_end_count"))}</label><input class="ctl" id="rule-count" type="number" min="1" max="10000" value="${esc(fields.COUNT || "10")}" required></div>
+      <div class="field"><label>${esc(t("rp_workday"))}</label><select class="ctl" id="rule-workday" data-calendar="${esc(fields["X-QD-CALENDAR"] || calendar?.id || "")}"><option value="">${esc(t("rp_workday_none"))}</option><option value="SKIP" ${fields["X-QD-WORKDAY"] === "SKIP" ? "selected" : ""}>${esc(t("rp_workday_skip"))}</option><option value="NEXT" ${fields["X-QD-WORKDAY"] === "NEXT" ? "selected" : ""}>${esc(t("rp_workday_next"))}</option></select></div>
+      <p class="desc">${esc(t("rp_workday_hint", {years:(calendar?.years || []).join(", ")}))}</p>
     </div>
     <div id="rule-advanced" ${advanced ? "" : "hidden"}><textarea class="ctl" id="rule-raw" rows="3" placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR">${esc(raw.startsWith("FREQ=") ? raw : `FREQ=${freq}`)}</textarea></div>
     <label class="chk"><input id="rule-allday" type="checkbox" ${$("tk-allday").checked ? "checked" : ""}>${esc(t("tk_allday"))}</label>
     <div class="hint danger" id="rule-error" role="alert" hidden></div>
-    <div class="btnrow"><button class="btn" data-act="rule-cancel">${esc(t("cancel"))}</button><button class="btn pri" data-act="rule-save">${esc(t("save"))}</button></div>
+    <div id="rule-preview-result" class="hint" aria-live="polite" hidden></div>
+    <div class="btnrow"><button class="btn" data-act="rule-cancel">${esc(t("cancel"))}</button><button class="btn" data-act="rule-preview">${esc(t("rp_preview"))}</button><button class="btn pri" data-act="rule-save">${esc(t("save"))}</button></div>
   </div>`;
   $("rule-mode").onchange = () => {
     const advanced = $("rule-mode").value === "advanced";
@@ -1619,6 +1823,7 @@ function openRuleDialog() {
   };
   $("rule-freq").onchange = () => { $("rule-weekdays").hidden = $("rule-freq").value !== "WEEKLY"; };
   $("rule-end").onchange = () => { $("rule-until-row").hidden = $("rule-end").value !== "date"; $("rule-count-row").hidden = $("rule-end").value !== "count"; };
+  dialog.oninput = () => { dialog.dataset.previewSeq = String(Number(dialog.dataset.previewSeq || 0) + 1); $("rule-preview-result").hidden = true; };
   dialog.showModal();
 }
 
@@ -1637,7 +1842,23 @@ function buildDialogRule() {
     if (!$("rule-count").reportValidity()) throw new Error(t("rp_invalid"));
     rule += ";COUNT=" + $("rule-count").value;
   }
+  if ($("rule-workday").value) rule += `;X-QD-WORKDAY=${$("rule-workday").value};X-QD-CALENDAR=${$("rule-workday").dataset.calendar}`;
   return rule;
+}
+
+async function previewRuleDialog() {
+  const dialog = $("rule-dialog"), ticket = String(Number(dialog.dataset.previewSeq || 0) + 1);
+  dialog.dataset.previewSeq = ticket;
+  const error = $("rule-error"), box = $("rule-preview-result");
+  error.hidden = true; box.hidden = true;
+  try {
+    const repeat = $("rule-mode").value === "advanced" ? $("rule-raw").value.trim() : buildDialogRule();
+    const preview = await call("task.repeat_preview", {repeat, due_at:$("tk-due").value || defaultDueText()});
+    if (!box.isConnected || !dialog.open || dialog.dataset.previewSeq !== ticket) return;
+    box.hidden = false;
+    const formatDate = value => new Intl.DateTimeFormat(locale(), {dateStyle:"medium", ...(value.includes("T") ? {timeStyle:"short"} : {})}).format(new Date(value.includes("T") ? value : value + "T00:00:00"));
+    box.innerHTML = `<strong>${esc(t("rp_first"))}</strong> ${esc(formatDate(preview.first_due_at))}<br>${esc((preview.upcoming || []).map(formatDate).join(" · "))}${(preview.warnings || []).map(w=>`<p class="danger">${esc(t(w.key, w))}</p>`).join("")}`;
+  } catch (e) { if (error.isConnected && dialog.open && dialog.dataset.previewSeq === ticket) { error.hidden = false; error.textContent = e.message; } }
 }
 
 function cancelRuleDialog() {
@@ -1817,7 +2038,7 @@ async function countdownSave(id) {
 
 let externalRefreshBusy = false;
 function canRefreshExternal() {
-  if (!state.booted || state.busy || document.hidden || !$("mask").hidden || $("rule-dialog")?.open) return false;
+  if (!state.booted || state.busy || state.taskPage?.loading || state.board?.columns_loading || state.board?.columns.some(c=>c.loading) || document.hidden || !$("mask").hidden || $("rule-dialog")?.open) return false;
   if (document.activeElement?.matches("input,textarea,select,[contenteditable=true]")) return false;
   if (["quickadd", "noteadd"].some(id => $(id)?.value.trim())) return false;
   if (state.detail && (("title" in state.detail.data && $("title") && $("title").value.trim() !== state.detail.data.title)
@@ -1829,7 +2050,7 @@ async function refreshExternalChanges() {
   externalRefreshBusy = true;
   try {
     const health = await call("app.health");
-    if (JSON.stringify(health.change_token) === JSON.stringify(state.health?.change_token)) return;
+    if (JSON.stringify(health.change_token) === JSON.stringify(state.health?.change_token) && health.today === state.health?.today) return;
     const [ap, vp] = await Promise.all([call("app.pref_get"), call("view.pref_get")]);
     if (!canRefreshExternal()) return;
     const prefs = { ...vp.prefs, ...ap.prefs };
@@ -1853,6 +2074,25 @@ async function boot() {
   });
   document.addEventListener("scroll", ev => {
     const el = ev.target;
+    if(el.matches?.('.notification-events')){
+      if(notificationInbox?.page?.has_more&&!notificationInbox.loading&&el.scrollTop>0&&el.scrollHeight-el.clientHeight-el.scrollTop<=4)openNotificationInbox(notificationInbox.offset+50).catch(showError);
+      return;
+    }
+    if (el.matches?.('.calendar-day-events')) {
+      if (calendarDay?.page?.has_more && !calendarDay.loading && el.scrollTop>0 && el.scrollHeight-el.clientHeight-el.scrollTop<=4) openCalendarDay(calendarDay.date,calendarDay.offset+50).catch(showError);
+      return;
+    }
+    if (el.id === "scroll") {
+      const editing = document.activeElement?.matches("input,textarea,select,[contenteditable=true]") || $("quickadd")?.value.trim();
+      if (state.taskPage && !editing && el.scrollTop > 0 && el.scrollHeight-el.clientHeight-el.scrollTop <= 4) changeTaskPage(1).catch(showError);
+      return;
+    }
+    if (el.matches?.('.board-cards')) {
+      if (boardRestoring) return;
+      const editing = document.activeElement?.matches('input,textarea,select,[contenteditable=true]');
+      if (!editing && el.scrollTop>0 && el.scrollHeight-el.clientHeight-el.scrollTop<=4) changeBoardPage(el.dataset.column,1).catch(showError);
+      return;
+    }
     if (!el.matches?.(".catalog-scroll")) return;
     const c = catalogs[el.dataset.catalog];
     c.scrollTop = el.scrollTop;
@@ -1860,7 +2100,7 @@ async function boot() {
   }, true);
   // 任务行右键菜单。非任务区域的右键保持浏览器默认（开发者要能检查元素）。
   document.addEventListener("contextmenu", (ev) => {
-    const row = ev.target.closest('.task, .ev[data-act="open"]');
+    const row = ev.target.closest('.task:not(.search-result), .ev[data-act="open"]');
     if (!row) { closeTaskMenu(); return; }
     ev.preventDefault();
     openTaskMenu(ev.clientX, ev.clientY, row.dataset.id);
@@ -1919,6 +2159,8 @@ async function boot() {
     await Promise.all([loadAll(), loadAlert(), loadData()]);
     patch({ booted: true });
     render();
+    openPendingNotification();
+    setInterval(openPendingNotification,1000);
     setInterval(refreshExternalChanges, 2000);
     setInterval(refreshSyncPanel, 2000);
     addEventListener("focus", refreshExternalChanges);

@@ -21,9 +21,18 @@ public class MainActivity extends Activity {
     private final ExecutorService executor=Executors.newFixedThreadPool(4);
     private final ExecutorService lifecycleExecutor=Executors.newSingleThreadExecutor();
     private ValueCallback<Uri[]> fileCallback;
+    private String notificationPayload;
+    private synchronized void captureNotification(Intent intent){
+        if(intent!=null){
+            String value=intent.getStringExtra(NotificationBridge.PAYLOAD);
+            if(value!=null&&value.length()<=4096)notificationPayload=value;
+        }
+    }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);synchronized(this){setIntent(intent);captureNotification(intent);}}
     private static final String HOME="https://appassets.androidplatform.net/assets/web/index.html";
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        captureNotification(getIntent());
         WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
         FrameLayout root=new FrameLayout(this);
         web=new WebView(this);
@@ -64,6 +73,9 @@ public class MainActivity extends Activity {
     }
     public WebView getWebView(){return web;}
     public class NativeApi {
+        @JavascriptInterface public String takeNotification(){
+            synchronized(MainActivity.this){String value=notificationPayload;notificationPayload=null;if(getIntent()!=null)getIntent().removeExtra(NotificationBridge.PAYLOAD);return value;}
+        }
         @JavascriptInterface public void invoke(String id,String feature,String params){
             if(id.length()>100||feature.length()>100||params.length()>8_000_000)return;
             executor.execute(()->{

@@ -51,10 +51,15 @@ public class AndroidOfflineAlertsTest {
         JSONObject restore=new JSONObject().put("master",old.get("master")).put("channels",old.get("channels")).put("dnd",old.get("dnd"));
         String wifi=shell(automation,"settings get global wifi_on");
         String mobile=shell(automation,"settings get global mobile_data");
+        String airplane=shell(automation,"cmd connectivity airplane-mode");
+        assertTrue("Cannot inspect airplane mode: "+airplane,airplane.equals("enabled")||airplane.equals("disabled"));
         String itemId=null;
         OneTimeWorkRequest work=null;
         WorkManager manager=WorkManager.getInstance(context);
         try {
+            // AOSP ConnectivityService shell interface; prevent emulator radio auto-reconnect.
+            shell(automation,"cmd connectivity airplane-mode enable");
+            assertEquals("enabled",shell(automation,"cmd connectivity airplane-mode"));
             shell(automation,"svc wifi disable");shell(automation,"svc data disable");
             ConnectivityManager connections=(ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
             for(int i=0;i<30&&connections.getActiveNetwork()!=null;i++)Thread.sleep(200);
@@ -75,23 +80,36 @@ public class AndroidOfflineAlertsTest {
             assertNotNull(info);assertEquals(info.toString(),WorkInfo.State.SUCCEEDED,info.getState());
             NotificationManager notifications=(NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
             boolean received=false;
+            Notification receivedNotification=null;
             for(int i=0;i<20&&!received;i++){
                 for(StatusBarNotification notification:notifications.getActiveNotifications()){
-                    CharSequence text=notification.getNotification().extras.getCharSequence(Notification.EXTRA_TEXT);
-                    if(text!=null&&text.toString().contains(title))received=true;
+                    CharSequence text=notification.getNotification().extras.getCharSequence(Notification.EXTRA_TITLE);
+                    if(text!=null&&text.toString().equals(title)){received=true;receivedNotification=notification.getNotification();}
                 }
                 if(!received)Thread.sleep(250);
             }
             assertTrue("Offline local worker did not post the due task notification",received);
-            assertNull(connections.getActiveNetwork());
+            assertNotNull(receivedNotification);assertEquals(2,receivedNotification.actions.length);
+            receivedNotification.actions[1].actionIntent.send();
+            boolean snoozed=false;
+            for(int i=0;i<80&&!snoozed;i++){
+                snoozed=call(context,"task.get",new JSONObject().put("item_id",itemId)).getJSONObject("data").has("snoozed_until");
+                if(!snoozed)Thread.sleep(250);
+            }
+            assertTrue("Notification snooze did not run without network",snoozed);
+            assertEquals("enabled",shell(automation,"cmd connectivity airplane-mode"));
+            android.net.Network active=connections.getActiveNetwork();
+            assertNull("Network returned during offline test; capabilities="+
+                (active==null?"none":connections.getNetworkCapabilities(active)),active);
         } finally {
             try {
                 if(work!=null)manager.cancelWorkById(work.getId());
                 if(itemId!=null)call(context,"task.delete",new JSONObject().put("item_id",itemId));
                 call(context,"alert.config_update",new JSONObject().put("config",restore));
             } finally {
-                if(wifi.equals("1"))shell(automation,"svc wifi enable");
-                if(mobile.equals("1"))shell(automation,"svc data enable");
+                shell(automation,"cmd connectivity airplane-mode "+(airplane.equals("enabled")?"enable":"disable"));
+                shell(automation,"svc wifi "+(wifi.equals("1")?"enable":"disable"));
+                shell(automation,"svc data "+(mobile.equals("1")?"enable":"disable"));
             }
         }
     }

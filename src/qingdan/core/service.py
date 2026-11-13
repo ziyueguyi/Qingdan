@@ -13,7 +13,7 @@ from qingdan.core.context import app_dir as context_app_dir, ctx
 from qingdan.core.merge import same  # noqa: F401  （保持模块导出面，供同步层复用）
 from qingdan.core.models import Item, new_id
 from qingdan.core.nlp import parse_quick
-from qingdan.core import rrule, stamp
+from qingdan.core import rrule, stamp, workdays
 from qingdan.core.icons import check_icon
 from qingdan.core.registry import REGISTRY, feature, not_found, validation_error
 from qingdan.core.view import as_date, parse_dt
@@ -59,6 +59,12 @@ def _anchor_for(repeat: str | None, due_at: Any) -> str | None:
     """
     if not repeat:
         return None
+    rule=rrule.try_parse(repeat)
+    if rule and rule.workday and due_at:
+        # due_at is normalized by workday alignment. Keep its nominal anchor
+        # in the same wall-clock frame before syncing to another device.
+        parsed=parse_dt(due_at)
+        if parsed is not None:return _fmt_due_like(due_at,parsed)
     return due_at or None
 
 _TASK_FIELDS = {
@@ -205,18 +211,23 @@ def _smart_key(it: Item) -> tuple:
 def health() -> dict:
     """存活探针 + 侧栏徽标计数。不需要登录，供外部脚本与冒烟测试使用。"""
     st = ctx.need_store()
-    return {
-        "ok": True,
-        "version": __version__,
-        "device_id": st.device_id,
-        **st.health_counts(),
-        "change_token": st.change_token(),
-        "authed": ctx.authed,
-        "data_dir": str(ctx.data_dir),
-        # 数据到底读自哪里、为什么在那里：出问题时第一句要能回答这个
-        "data_dir_source": ctx.data_dir_source,
-        "app_dir": str(context_app_dir()),
-    }
+    from qingdan.core.notification_inbox import token as notification_token
+    with st.read_snapshot():
+        return {
+            "ok": True,
+            "version": __version__,
+            "device_id": st.device_id,
+            **st.health_counts(),
+            "change_token": st.change_token(),
+            "task_token": st.task_change_token(),
+            "notification_token": notification_token(st),
+            "today": stamp.now_day(),
+            "authed": ctx.authed,
+            "data_dir": str(ctx.data_dir),
+            # 数据到底读自哪里、为什么在那里：出问题时第一句要能回答这个
+            "data_dir_source": ctx.data_dir_source,
+            "app_dir": str(context_app_dir()),
+        }
 
 
 @feature(name="app.info", group="app", http=("GET", "/api/v1/app/info"), idempotent=True)
@@ -230,6 +241,7 @@ def app_info() -> dict:
         "clock": {"offset_ms": st.clock.offset_ms, "last_ms": st.clock.last_ms,
                   "last_seq": st.clock.last_seq},
         "features": sorted(REGISTRY),
+        "workday_calendar": workdays.metadata(),
     }
 
 
@@ -344,6 +356,7 @@ def task_create(title: str, note: str = "", priority: int = 4, due_at: str | Non
         "created_at": stamp.now_text(),
     }
     _validate_task_data(data)
+    _align_workday_start(data)
     out = _create("task", data).to_dict()
     if canon_repeat and not due_at:
         # 不静默收下：设了重复却没有到期日 = 永远不会推进，必须让用户看见原因
@@ -399,12 +412,18 @@ def task_update(item_id: str, **changes: Any) -> dict:
     if "repeat" in changes:
         changes["repeat"] = _validate_repeat(changes["repeat"])   # 曾经原样收下任意串
     data.update(changes)
+    if 'remind_at' in changes:
+        _workday_reminder_frame(data)
+    if any(key in changes and changes[key] != old.data.get(key) for key in ('due_at','repeat','remind_at')):
+        data.pop('snoozed_until',None)
     if "list_id" in changes and changes["list_id"] != old.data.get("list_id") and "section_id" not in changes:
         data["section_id"] = None
     _validate_task_data(data, item_id)
-    if "repeat" in changes or "due_at" in changes:
+    if (("repeat" in changes and changes["repeat"] != old.data.get("repeat")) or
+            ("due_at" in changes and changes["due_at"] != old.data.get("due_at"))):
         # 显式改重复/改到期日 = 用户重新指定「从哪天开始」，所以重新下锚
         data["repeat_start"] = _anchor_for(data.get("repeat"), data.get("due_at"))
+        _align_workday_start(data)
     if "done_at" in changes and changes["done_at"] is None and changes.get("status") == "done":
         data["done_at"] = stamp.now_text()
     return _bump(old, data).to_dict()
@@ -416,9 +435,57 @@ def _fmt_due_like(original: Any, dt: datetime) -> str:
     全天任务被推进成 `2026-11-07T00:00:00` 会在界面上多出个「00:00」，
     并且让 `due_all_day` 与 `due_at` 自相矛盾。
     """
-    if original and "T" not in str(original):
+    if original and all(marker not in str(original).strip() for marker in ('T','t',' ',':')):
         return dt.date().isoformat()
     return dt.replace(microsecond=0).isoformat()
+
+
+def _align_workday_start(data: dict) -> None:
+    """Apply filtering to an explicitly chosen start, retaining the nominal anchor."""
+    rule = rrule.try_parse(data.get("repeat"))
+    if not rule or not rule.workday:
+        return
+    due = parse_dt(data.get("due_at"))
+    if due is None:
+        raise validation_error("工作日规则需要到期日期")
+    try:
+        first = next(rrule.occurrences(data.get("repeat_start") or due, rule), None)
+    except rrule.CalendarError as error:
+        raise validation_error(str(error), key="calendar_missing_year", year=error.year,
+                               calendar_id=error.calendar_id) from None
+    if first is None:
+        raise validation_error("结束日期之前没有符合规则的工作日")
+    effective = due.replace(year=first.year, month=first.month, day=first.day)
+    delta = effective - due
+    data["due_at"] = _fmt_due_like(data.get("due_at"), effective)
+    _workday_reminder_frame(data)
+    if delta:
+        data["remind_at"] = _shift_reminders(data.get('remind_at') or [],delta)
+
+
+def _workday_reminder_frame(data):
+    rule=rrule.try_parse(data.get('repeat'))
+    if not rule or not rule.workday:return
+    values=data.get('remind_at')
+    if values is None:values=[]
+    if not isinstance(values,list):raise validation_error('remind_at 必须是日期时间数组')
+    normalized=[]
+    for value in values:
+        parsed=parse_dt(value)
+        if parsed is None:raise validation_error('remind_at 必须是 ISO8601 日期或时间')
+        normalized.append(_fmt_due_like(value,parsed))
+    data['remind_at']=normalized
+
+
+def _shift_reminders(values,delta):
+    """Preserve each reminder's own date/time shape and explicit UTC offset."""
+    shifted=[]
+    for value in values:
+        try:
+            parsed=value if isinstance(value,datetime) else datetime.fromisoformat(str(value).strip().replace('Z','+00:00'))
+        except (ValueError,TypeError):continue
+        shifted.append(_fmt_due_like(value,parsed+delta))
+    return shifted
 
 
 def _repeat_roll(old: Item, kind: str) -> tuple[dict, dict]:
@@ -437,6 +504,8 @@ def _repeat_roll(old: Item, kind: str) -> tuple[dict, dict]:
     extra: dict[str, Any] = {"rolled": False, "kind": kind}
 
     if rule is None or due is None:
+        if rule is None and "X-QD-" in str(data.get("repeat", "")).upper():
+            raise validation_error("当前客户端不支持该工作日规则或日历版本，请更新后再推进")
         # 推不动就把原因说出来，绝不静默当普通完成
         if data.get("repeat") and rule is None:
             extra["repeat_blocked_key"] = "repeat_rule_invalid"   # 另一台机器同步来的畸形规则
@@ -447,7 +516,11 @@ def _repeat_roll(old: Item, kind: str) -> tuple[dict, dict]:
         return data, extra
 
     anchor = parse_dt(data.get("repeat_start")) or due
-    nxt = rrule.next_after(due, rule, anchor=anchor)
+    try:
+        nxt = rrule.next_after(due, rule, anchor=anchor)
+    except rrule.CalendarError as error:
+        raise validation_error(str(error), key="calendar_missing_year", year=error.year,
+                               calendar_id=error.calendar_id) from None
     prev_due = str(data.get("due_at"))
     ctx.need_store().occurrence_add(old.id, prev_due, now_text,
                                     "skipped" if kind == "skip" else "done")
@@ -465,8 +538,7 @@ def _repeat_roll(old: Item, kind: str) -> tuple[dict, dict]:
         data["done_at"] = None
     data.pop("snoozed_until", None)    # 贪睡只针对那一次，推进后必须失效
     # 提醒按同一位移平移，保住用户设的提前量 —— 否则任务滚到明天、提醒留在昨天。
-    rem = [t for t in (parse_dt(x) for x in (data.get("remind_at") or [])) if t]
-    data["remind_at"] = [_fmt_due_like(old.data.get("due_at"), t + delta) for t in rem]
+    data["remind_at"] = _shift_reminders(data.get('remind_at') or [],delta)
     extra.update(rolled=True, next_due_at=data["due_at"], occurrence=prev_due)
     return data, extra
 
@@ -509,7 +581,8 @@ def task_repeat_info(item_id: str, count: int = 5) -> dict:
     rule = rrule.try_parse(it.data.get("repeat"))
     due = parse_dt(it.data.get("due_at"))
     n = max(0, min(int(count), 50))
-    upcoming = rrule.upcoming(due, rule, n, anchor=it.data.get("repeat_start")) if (rule and due) else []
+    warnings: list[dict] = []
+    upcoming = rrule.upcoming(due, rule, n, anchor=it.data.get("repeat_start"), warnings=warnings) if (rule and due) else []
     out: dict[str, Any] = {
         "item_id": it.id,
         "repeat": it.data.get("repeat"),
@@ -517,6 +590,7 @@ def task_repeat_info(item_id: str, count: int = 5) -> dict:
         "due_at": it.data.get("due_at"),
         "repeat_start": it.data.get("repeat_start"),
         "upcoming": [_fmt_due_like(it.data.get("due_at"), d) for d in upcoming],
+        "warnings": warnings,
         "history": ctx.need_store().occurrence_count(it.id),
         "synced": bool(it.data.get("repeat")),   # 规则本身是 Item 字段，参与同步
         "history_synced": False,                 # 完成历史是设备本地的，永不进同步
@@ -683,9 +757,12 @@ def task_set_due(item_id: str, due_at: str | None = None, all_day: bool = False)
                                    got=due_at)
     data = {**old.data, "due_at": due_at or None,
             "due_all_day": bool(all_day) if due_at else True}
+    if data['due_at'] != old.data.get('due_at'):
+        data.pop('snoozed_until',None)
     # 这是独立接口、不经过 task.update，所以锚点必须在这里也维护一遍 ——
     # 漏掉的话「改到期日」后 COUNT 仍从旧锚数，用户看到的剩余次数是错的。
     data["repeat_start"] = _anchor_for(data.get("repeat"), data.get("due_at"))
+    _align_workday_start(data)
     return _bump(old, data).to_dict()
 
 
@@ -700,12 +777,18 @@ def task_set_repeat(item_id: str, repeat: str | None = None) -> dict:
     old = _load(item_id, allow_deleted=False)
     canon = _validate_repeat(repeat)
     data = {**old.data, "repeat": canon, "repeat_start": _anchor_for(canon, old.data.get("due_at"))}
+    if canon != old.data.get('repeat'):
+        data.pop('snoozed_until',None)
+    _align_workday_start(data)
     out = _bump(old, data).to_dict()
     if canon:
         rule = rrule.try_parse(canon)
         due = parse_dt(data.get("due_at"))
         out["summary"] = rrule.summary(rule)
-        nxt = rrule.next_after(due, rule, anchor=data["repeat_start"]) if (rule and due) else None
+        warnings: list[dict] = []
+        dates = rrule.upcoming(due, rule, 1, anchor=data["repeat_start"], warnings=warnings) if (rule and due) else []
+        nxt = dates[0] if dates else None
+        out["warnings"] = warnings
         out["next_due_at"] = _fmt_due_like(data.get("due_at"), nxt) if nxt else None
         if not due:
             out["needs_due_key"] = "repeat_needs_due"
@@ -721,9 +804,15 @@ def task_repeat_preview(repeat: str, due_at: str, count: int = 5) -> dict:
     if not canon or due is None or not 1 <= count <= 20:
         raise validation_error("需提供有效周期、到期日期和 1..20 的预览条数")
     rule = rrule.parse(canon)
+    data = {"due_at": due_at, "repeat": canon, "repeat_start": due_at}
+    _align_workday_start(data)
+    effective = parse_dt(data["due_at"])
+    warnings: list[dict] = []
+    dates = rrule.upcoming(effective, rule, count, anchor=due_at, warnings=warnings)
     return {"repeat": canon, "summary": rrule.summary(rule),
-            "upcoming": [_fmt_due_like(due_at, dt) for dt in
-                         rrule.upcoming(due, rule, count, anchor=due_at)]}
+            "first_due_at": data["due_at"], "warnings": warnings,
+            "calendar": workdays.metadata(rule.calendar_id) if rule.workday else None,
+            "upcoming": [_fmt_due_like(due_at, dt) for dt in dates]}
 
 
 @feature(name="task.set_reminder", group="task", http=("POST", "/api/v1/tasks/{item_id}/reminder"),
@@ -745,8 +834,10 @@ def task_set_reminder(item_id: str, remind_at: list | None = None, mode: str = "
         if bad:
             raise validation_error("未知告警渠道", allowed=["toast", "dingtalk", "email"],
                                    got=sorted(bad))
-    return _bump(old, {**old.data, "remind_at": times, "remind_mode": mode,
-                       "alert_channels": channels}).to_dict()
+    data = {**old.data, "remind_at": times, "remind_mode": mode, "alert_channels": channels}
+    _workday_reminder_frame(data)
+    data.pop('snoozed_until',None)
+    return _bump(old,data).to_dict()
 
 
 @feature(name="task.move", group="task", http=("POST", "/api/v1/tasks/{item_id}/move"),
@@ -849,14 +940,21 @@ def note_delete(item_id: str) -> dict:
 
 @feature(name="search.query", group="search", http=("GET", "/api/v1/search"), idempotent=True)
 def search_query(q: str, kinds: list | None = None, include_deleted: bool = False,
-                 limit: int = 200) -> dict:
+                 limit: int = 200, offset: int = 0) -> dict:
     """中文子串搜索用 LIKE。FTS5 的 trigram 分词按 3 字符建索引，
     「立案」「周报」这类两字词命中恒为 0（spike/fts_probe.py 实测），故不采用。"""
     if not q or not q.strip():
         raise validation_error("q 不能为空")
-    items = ctx.need_store().search_text(q.strip(), kinds=kinds,
-                                         include_deleted=include_deleted, limit=limit)
-    return {"total": len(items), "items": [it.to_dict() for it in items]}
+    from qingdan.core import task_query
+    where, args = ['(i.data LIKE ? OR i.meta LIKE ?)'], [f'%{q.strip()}%'] * 2
+    if kinds:
+        where.append('i.kind IN (' + ','.join('?' for _ in kinds) + ')')
+        args.extend(kinds)
+    if not include_deleted:
+        where.append('i.deleted=0')
+    items, page = task_query.select(ctx.need_store(), where, args, limit=limit, offset=offset,
+                                   order='i.kind,i.id')
+    return {**page, "items": [it.to_dict() for it in items]}
 
 
 @feature(name="undo.last", group="undo", http=("POST", "/api/v1/undo"), undoable=False)

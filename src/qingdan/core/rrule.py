@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Iterator
 
+from qingdan.core import workdays
+
 FREQS = ("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 
 #: 星期缩写 → Python weekday()（周一=0）
@@ -36,12 +38,18 @@ _FREQ_KEY = {"DAILY": "rp_daily", "WEEKLY": "rp_weekly",
 _FREQ_N_KEY = {"DAILY": "rp_every_n_days", "WEEKLY": "rp_every_n_weeks",
                "MONTHLY": "rp_every_n_months", "YEARLY": "rp_every_n_years"}
 
-#: 迭代上限。任何规则最多走这么多步，防死循环（畸形规则来自另一台机器时也不能挂）。
+#: 旧候选生成器的遍历边界；推进/预览按窗口定位，不把遍历预算视为规则结束。
 _MAX_STEPS = 5000
 
 
 class RuleError(ValueError):
     """规则不合法。service 层把它翻成 validation_error，视图层用 try_parse 吞掉。"""
+
+
+class CalendarError(RuleError):
+    def __init__(self, error: workdays.CalendarUnavailable):
+        self.calendar_id, self.year = error.calendar_id, error.year
+        super().__init__(str(error))
 
 
 @dataclass(frozen=True)
@@ -52,6 +60,8 @@ class Rule:
     bymonthday: tuple[int, ...] = ()
     until: date | None = None
     count: int | None = None
+    workday: str | None = None
+    calendar_id: str | None = None
     raw: str = field(default="", compare=False)
 
 
@@ -103,7 +113,8 @@ def parse(text: Any) -> Rule:
             raise RuleError(f"RRULE 里 {k} 出现两次")
         parts[k] = v.strip()
 
-    unknown = set(parts) - {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL", "COUNT"}
+    unknown = set(parts) - {"FREQ", "INTERVAL", "BYDAY", "BYMONTHDAY", "UNTIL", "COUNT",
+                            "X-QD-WORKDAY", "X-QD-CALENDAR"}
     if unknown:
         # 明确拒绝而不是忽略：忽略了用户会以为生效了（宁缺毋假）
         raise RuleError(f"本实现不支持的 RRULE 键：{sorted(unknown)}"
@@ -173,8 +184,16 @@ def parse(text: Any) -> Rule:
     if until is not None and count is not None:
         raise RuleError("UNTIL 与 COUNT 不能同时出现（RFC 5545 同样禁止）")
 
+    policy = parts.get("X-QD-WORKDAY", "").upper() or None
+    calendar_id = parts.get("X-QD-CALENDAR", "").upper() or None
+    if (policy is None) != (calendar_id is None):
+        raise RuleError("X-QD-WORKDAY 与 X-QD-CALENDAR 必须同时指定")
+    if policy is not None and policy not in {"SKIP", "NEXT"}:
+        raise RuleError("X-QD-WORKDAY 只支持 SKIP（跳过）或 NEXT（顺延）")
+    if calendar_id is not None and calendar_id != workdays.CALENDAR_ID:
+        raise RuleError(f"不支持的工作日历版本：{calendar_id}，请更新客户端")
     return Rule(freq=freq, interval=interval, byday=byday, bymonthday=bymonthday,
-                until=until, count=count, raw=s)
+                until=until, count=count, workday=policy, calendar_id=calendar_id, raw=s)
 
 
 def try_parse(text: Any) -> Rule | None:
@@ -273,6 +292,17 @@ def occurrences(anchor: Any, rule: Rule, limit: int = _MAX_STEPS) -> Iterator[da
     for d in _dates(a, rule):
         if d < a:
             continue
+        if rule.until is not None and d > rule.until:
+            return
+        if rule.workday:
+            try:
+                if rule.workday == "SKIP":
+                    if not workdays.is_workday(d, rule.calendar_id):
+                        continue
+                else:
+                    d = workdays.on_or_after(d, rule.calendar_id)
+            except workdays.CalendarUnavailable as error:
+                raise CalendarError(error) from None
         if last is not None and d <= last:     # BYMONTHDAY 夹取可能撞日（如 30 与 -1）
             continue
         if rule.until is not None and d > rule.until:
@@ -292,24 +322,12 @@ def next_after(due: Any, rule: Rule | str | None, anchor: Any = None) -> datetim
     `anchor` 是第一次的日期（`repeat_start`）。COUNT 与 INTERVAL 的对齐都靠它；
     缺失时退化为以 `due` 为锚 —— 老数据没有 anchor，宁可算得保守也不能抛。
     """
-    if rule is None:
-        return None
-    r = rule if isinstance(rule, Rule) else try_parse(rule)
-    if r is None:
-        return None
-    dt = _as_dt(due)
-    target = dt.date()
-    a = _as_dt(anchor).date() if anchor else target
-    if a > target:                             # anchor 晚于 due（用户改过到期日）→ 以 due 为准
-        a = target
-    for d in occurrences(a, r):
-        if d > target:
-            return dt.replace(year=d.year, month=d.month, day=d.day)
-    return None
+    values=upcoming(due,rule,n=1,anchor=anchor)
+    return values[0] if values else None
 
 
 def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
-             end: Any = None) -> list[datetime]:
+             end: Any = None, warnings: list[dict] | None = None) -> list[datetime]:
     """`due` 之后的 n 次（可选限制到 `end` 日期），给界面预览与日历展开用。"""
     if rule is None or int(n) <= 0:
         return []
@@ -321,17 +339,9 @@ def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
     a = _as_dt(anchor).date() if anchor else target
     if a > target:
         a = target
-    end_d = _as_dt(end).date() if end else None
-    out: list[datetime] = []
-    for d in occurrences(a, r):
-        if d <= target:
-            continue
-        if end_d is not None and d > end_d:
-            break
-        out.append(dt.replace(year=d.year, month=d.month, day=d.day))
-        if len(out) >= int(n):
-            break
-    return out
+    from qingdan.core.recurrence_window import dates
+    values=dates(target,r,a,target,_as_dt(end).date() if end else date.max,warnings,limit=int(n))
+    return [dt.replace(year=d.year,month=d.month,day=d.day) for d in values]
 
 
 # --------------------------------------------------------------------------- 展示
@@ -359,4 +369,7 @@ def summary(rule: Rule | str | None) -> dict[str, Any]:
         out["until"] = r.until.isoformat()
     if r.count is not None:
         out["count"] = r.count
+    if r.workday:
+        out["workday"] = r.workday
+        out["calendar_id"] = r.calendar_id
     return out

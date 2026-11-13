@@ -25,6 +25,11 @@ public class AndroidSmokeTest {
         JSONObject task=call("task.create",new JSONObject().put("title","Android smoke task").put("list_id",group.getString("id")).put("due_at","2027-01-31T09:00:00").put("repeat","monthly").toString());
         JSONObject advanced=call("task.complete",new JSONObject().put("item_id",task.getString("id")).toString());
         assertEquals("2027-02-28T09:00:00",advanced.getJSONObject("data").getString("due_at"));
+        // Exercise SQLite ROW_NUMBER calendar paging through the native bridge.
+        JSONObject calendar=call("view.calendar","{\"start\":\"2027-02-28\",\"days\":1,\"today\":\"2027-02-28\",\"limit\":3}");
+        assertTrue(calendar.getInt("total")>=1);
+        assertTrue(calendar.getJSONArray("items").length()<=3);
+        assertEquals("2027-02-28",calendar.getJSONArray("cells").getJSONObject(0).getString("date"));
         String encrypted=SecureStore.encrypt("local-test-secret");
         assertFalse(encrypted.contains("local-test-secret"));assertEquals("local-test-secret",SecureStore.decrypt(encrypted));
         JSONObject schedule=call("autosync.config_set","{\"enabled\":true,\"mode\":\"daily\",\"times\":[\"09:00\",\"18:00\"]}");

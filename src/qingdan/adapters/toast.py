@@ -99,7 +99,8 @@ class ToastChannel:
             self._notifier(title, body)
             return
         if backend == "balloon":
-            _tray_notifier(title, body)
+            if _tray_notifier(title, body) is False:
+                raise RuntimeError('Tray notification was not accepted')
             return
         if backend == "toast":
             from winotify import Notification
@@ -115,6 +116,8 @@ class ToastChannel:
             return SendResult(ok=True, sent_count=0, covered=0)
         title, body = self.compose(msgs)
         try:
+            from qingdan.core.notification_inbox import capture
+            capture(msgs)
             self._show(title, body)
             return SendResult(ok=True, sent_count=len(msgs), covered=len(msgs),
                               detail={"backend": self.backend})

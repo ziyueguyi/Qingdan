@@ -201,6 +201,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: Qingdan-*
@@ -226,7 +227,12 @@ jobs:
               exit 0
             fi
           else
-            printf '%s\n' 'Windows x64 与 Android 64 位版本。' '' 'Windows：下载 windows-x64 ZIP，解压后保留整个 Qingdan 文件夹，运行 Qingdan.exe。Android：下载 android-arm64 APK，在手机安装。' '' '支持可配置时间的定时增量同步。安卓后台执行可能因省电或断网延后。SHA-256 校验文件一并提供；Source code 是源码，不是运行包。' > release-notes.md
+            notes_file="docs/releases/$VERSION.md"
+            if [[ -f "$notes_file" ]]; then
+              cp "$notes_file" release-notes.md
+            else
+              printf '%s\n' 'Windows x64 与 Android 64 位版本。' '' 'Windows：下载 windows-x64 ZIP，解压后保留整个 Qingdan 文件夹，运行 Qingdan.exe。Android：下载 android-arm64 APK，在手机安装。' '' '支持可配置时间的定时增量同步。安卓后台执行可能因省电或断网延后。SHA-256 校验文件一并提供；Source code 是源码，不是运行包。' > release-notes.md
+            fi
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "清单 $VERSION" --notes-file release-notes.md --draft
           fi
           gh release upload "$tag" release-files/*.zip release-files/*.apk release-files/*.sha256 release-files/SIZE.json --repo "$GITHUB_REPOSITORY" --clobber
