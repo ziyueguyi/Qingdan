@@ -1,0 +1,20 @@
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidOfflineAlertsTest.java
+  s_7909b70258899a::t_c4c871d416d6e0 54-55,60-62,91,93,101-103
+  s_7909b70258899a::t_c96375d3cb24bb 92,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "61f003e9c8acc94d9ae24d257569dd9f430c3d5c",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
