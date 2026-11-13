@@ -429,6 +429,11 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
 .task-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 0;color:var(--text-3);font-size:12px}
 .task-pager>span{text-align:center;overflow-wrap:anywhere}
 .task-pager>.btn{flex-shrink:0}
+.board .col{display:flex;flex-direction:column;max-height:calc(100dvh - 230px);flex-shrink:0}
+.board .col h4{flex:none}
+.board-cards{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.board-card-pager{display:flex;align-items:center;justify-content:space-between;gap:5px;flex:none;padding:0 4px 8px;color:var(--text-3);font-size:11px}
+.board-card-pager>span{min-width:0;text-align:center;overflow-wrap:anywhere}
 .rule-dialog .field>label{width:100px}
 .rule-dialog .ctl{background:var(--bg-2);color:var(--text);border:1px solid var(--line);padding:6px;border-radius:var(--radius-s)}
 #rule-raw{width:100%;box-sizing:border-box;resize:vertical}

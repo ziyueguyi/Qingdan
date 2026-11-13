@@ -1,0 +1,45 @@
+{
+  "tasks": 10000,
+  "repeat": 5,
+  "python": "3.14.5",
+  "platform": "Windows-11-10.0.22631-SP0",
+  "page_size": 50,
+  "legacy_materialize_sort": {
+    "median_ms": 108.935,
+    "max_ms": 127.423,
+    "peak_python_bytes": 23221675
+  },
+  "first_page": {
+    "median_ms": 17.644,
+    "max_ms": 19.819,
+    "peak_python_bytes": 131427
+  },
+  "middle_page": {
+    "median_ms": 38.514,
+    "max_ms": 39.536,
+    "peak_python_bytes": 132399
+  },
+  "counts": {
+    "median_ms": 88.036,
+    "max_ms": 90.539,
+    "peak_python_bytes": 30973
+  },
+  "stats": {
+    "median_ms": 65.934,
+    "max_ms": 67.554,
+    "peak_python_bytes": 30973
+  },
+  "board_first_five_columns": {
+    "median_ms": 125.458,
+    "max_ms": 138.689,
+    "peak_python_bytes": 198237
+  },
+  "board_column_second_page": {
+    "median_ms": 37.794,
+    "max_ms": 42.327,
+    "peak_python_bytes": 52558
+  },
+  "board_json_bytes": 76310,
+  "first_page_json_bytes": 37839,
+  "scope": "Backend queries only; frontend rendering and Android performance not measured."
+}

@@ -61,4 +61,11 @@ export class TaskPager {
     if (page.has_more) this.get(offset + this.size, true).catch(()=>{});
     if (offset > 0) this.get(offset - this.size, true).catch(()=>{});
   }
+
+  seed(page) {
+    if (JSON.stringify(page.change_token) !== this.revision) {
+      const error = new Error("PAGE_CHANGED"); error.code = "PAGE_CHANGED"; throw error;
+    }
+    this.cache.set(page.offset, page); this.trim();
+  }
 }

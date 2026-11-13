@@ -126,14 +126,16 @@ def order_by(mode, reverse=False):
     return ','.join(f'({key}) ' + ('DESC' if reverse else 'ASC') for key in keys[mode])
 
 
-def select(store, where, args, sort='smart', reverse=False, limit=0, offset=0, order=None):
+def select(store, where, args, sort='smart', reverse=False, limit=0, offset=0, order=None, known_total=None):
     limit, offset = paging(limit, offset)
+    ordering = order or order_by(sort, reverse)
     db = connection(store)
     predicate = ' AND '.join(f'({clause})' for clause in where)
     with store.read_snapshot():
-        total = db.execute(f'SELECT COUNT(*) FROM item i WHERE {predicate}', args).fetchone()[0]
-        rows = db.execute(f'SELECT i.* FROM item i WHERE {predicate} ORDER BY {order or order_by(sort, reverse)} LIMIT ? OFFSET ?',
-                          [*args, limit or -1, offset])
+        total = known_total if known_total is not None else db.execute(f'SELECT COUNT(*) FROM item i WHERE {predicate}', args).fetchone()[0]
+        rows = [] if offset>=total else db.execute(
+            f'SELECT i.* FROM item i WHERE {predicate} ORDER BY {ordering} LIMIT ? OFFSET ?',
+            [*args, limit or -1, offset])
         items = [store._row_to_item(row) for row in rows]
         token = store.task_change_token()
         return items, {'total': total, 'limit': limit, 'offset': offset,

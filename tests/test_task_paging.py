@@ -115,3 +115,10 @@ def test_ten_thousand_rows_only_decode_the_page_and_no_items_for_counts(app_ctx,
 def test_reject_invalid_page_parameters(params):
     with pytest.raises(QdError):
         call('view.query', name='all', **params)
+
+
+def test_empty_filter_still_rejects_unknown_sort():
+    filter_ = call('filter.create', name='empty', criteria={'open_only':True})
+    with pytest.raises(QdError) as error:
+        call('filter.tasks', item_id=filter_['id'], sort='bad', limit=50)
+    assert error.value.code == 'VALIDATION_ERROR'

@@ -8,7 +8,7 @@ import { catalogs, catalogItems, subscribeCatalog, scrollCatalog, PAGE_SIZE, ROW
 import { configureAccessUI, loadAccess, renderAccessTab, renderCliTab, handleAccessAction, handleAccessChange, clearAccessSecret } from "./access.js";
 import { call, ApiError, hasFeature, loadFeatures, featureCount } from "./api.js";
 import { t, setLang, locale } from "./i18n.js";
-import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError, changeTaskPage } from "./store.js";
+import { state, subscribe, patch, loadAll, loadDetail, loadAlert, loadData, loadSync, select, mutate, showError, changeTaskPage, changeBoardPage } from "./store.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -55,6 +55,7 @@ function dueClass(iso) {
 
 const groupName = (id) => (state.groups.find((g) => g.id === id) || {}).data?.name || state.groupNames[id] || "";
 const repeatLabel = (v) => (REPEAT_LABEL[v] ? t(REPEAT_LABEL[v]) : v);
+let boardRestoring = false, boardRestoreSequence = 0;
 
 // --------------------------------------------------------------------------- 渲染
 
@@ -171,10 +172,11 @@ function renderToolbar() {
   const seg = [["list", "layout_list"], ["board", "layout_board"], ["calendar", "layout_calendar"]]
     .map(([v, k]) => `<button class="${state.layout === v ? "on" : ""}" data-act="layout" data-v="${v}">${esc(t(k))}</button>`)
     .join("");
-  // 「按清单」分组随清单界面一起移除；老偏好里若还存着 group，显示时回落到按日期
-  const groupVal = state.group;
-  const groups = [["none", "g_none"], ["date", "g_date"],
-                  ["priority", "g_prio"], ["tag", "g_tag2"], ["group", "g_list"]]
+  const choices = state.layout === "board"
+    ? [["status","g_status"],["group","g_list"],["priority","g_prio"]]
+    : [["none","g_none"],["date","g_date"],["priority","g_prio"],["tag","g_tag2"],["group","g_list"],["status","g_status"]];
+  const groupVal = state.layout === "board" && !choices.some(([value])=>value===state.group) ? "status" : state.group;
+  const groups = choices
     .map(([v, k]) => `<option value="${v}" ${groupVal === v ? "selected" : ""}>${esc(t(k))}</option>`)
     .join("");
   const sorts = [["smart", "s_smart"], ["due", "s_due"], ["priority", "s_prio"],
@@ -243,8 +245,24 @@ function renderMain() {
   const focused = oldQuick && document.activeElement === oldQuick;
   const selection = focused ? [oldQuick.selectionStart, oldQuick.selectionEnd] : null;
   if (!state.booted) { el.innerHTML = `<div class="loading">${esc(t("booting"))}</div>`; return; }
-  if (state.layout === "board") { el.innerHTML = renderBoard(); return; }
-  if (state.layout === "calendar") { el.innerHTML = renderCalendar(); return; }
+  if (state.layout === "board" && !state.searchQ) {
+    const previous = el.querySelector('.board');
+    const horizontal = previous?.scrollLeft || 0, windowKey = previous?.dataset.window;
+    const positions = new Map([...el.querySelectorAll('.board-cards')].map(node=>[node.dataset.column,{offset:node.dataset.pageOffset,top:node.scrollTop}]));
+    el.innerHTML = renderBoard();
+    const current = el.querySelector('.board');
+    if (current && current.dataset.window===windowKey) {
+      boardRestoring=true;const sequence=++boardRestoreSequence;
+      current.scrollLeft=horizontal;
+      for (const node of current.querySelectorAll('.board-cards')) {
+        const before=positions.get(node.dataset.column);
+        if (before?.offset===node.dataset.pageOffset) node.scrollTop=before.top;
+      }
+      requestAnimationFrame(()=>{if(sequence===boardRestoreSequence)boardRestoring=false;});
+    }
+    return;
+  }
+  if (state.layout === "calendar" && !state.searchQ) { el.innerHTML = renderCalendar(); return; }
 
   let html = "";
   if (state.view === "today" && state.countdowns.length) html += renderCountdownBanner();
@@ -312,13 +330,15 @@ function renderCountdownBanner() {
 function renderBoard() {
   const b = state.board;
   if (!b || !b.columns.length) return `<div class="empty">${esc(t("empty_list"))}</div>`;
-  return `<div class="board">` + b.columns.map((c) =>
+  const controls = `<nav class="task-pager" aria-label="${esc(t("board_columns"))}"><button class="btn" data-act="board-columns" data-v="-1" ${b.columns_loading || !b.columns_offset ? "disabled" : ""}>${esc(t("previous_page"))}</button><span>${esc(b.columns_loading ? t("task_page_loading") : t("board_column_range",{start:b.columns_offset+1,end:b.columns_offset+b.columns.length,total:b.columns_total}))}</span><button class="btn" data-act="board-columns" data-v="1" ${b.columns_loading || !b.columns_has_more ? "disabled" : ""}>${esc(t("next_page"))}</button></nav>`;
+  return controls + `<div class="board" data-window="${b.window}">` + b.columns.map((c) =>
     `<div class="col"><h4>${esc(bucketLabel(c))}<span>${c.total}</span></h4>` +
+    `<nav class="board-card-pager" aria-label="${esc(t("board_card_pages",{column:bucketLabel(c)}))}"><button class="iconbtn" data-act="board-cards" data-k="${esc(c.key)}" data-v="-1" title="${esc(t("previous_page"))}" ${c.loading || b.columns_loading || !c.offset ? "disabled" : ""}>‹</button><span>${esc(c.loading ? t("task_page_loading") : t("board_card_range",{start:c.total ? c.offset+1 : 0,end:Math.min(c.offset+c.items.length,c.total),total:c.total}))}</span><button class="iconbtn" data-act="board-cards" data-k="${esc(c.key)}" data-v="1" title="${esc(t("next_page"))}" ${c.loading || b.columns_loading || !c.has_more ? "disabled" : ""}>›</button></nav><div class="board-cards" data-column="${esc(c.key)}" data-page-offset="${c.offset}">` +
     c.items.map((it) => `<div class="card ${state.selected === it.id ? "on" : ""}"
        data-act="open" data-id="${esc(it.id)}">
        ${it.data.priority < 4 ? `<span style="color:${esc(PC[it.data.priority])}">⚑</span> ` : ""}${esc(it.data.title)}
        <div class="meta">${it.data.due_at ? `<span class="${dueClass(it.data.due_at)}">${esc(fmtDue(it.data.due_at))}</span>` : ""}</div>
-     </div>`).join("") + "</div>").join("") + "</div>";
+     </div>`).join("") + "</div></div>").join("") + "</div>";
 }
 
 function renderCalendar() {
@@ -1168,8 +1188,12 @@ async function onClick(ev) {
       break;
     case "clear-search": patch({ searchQ: "" }); $("q").value = ""; await loadAll(); break;
     case "task-page": await changeTaskPage(Number(v)); break;
-    case "layout":
-      patch({ layout: v }); await saveViewPrefs(); await loadAll(); break;
+    case "board-cards": await changeBoardPage(k,Number(v)); break;
+    case "board-columns": await changeBoardPage(null,Number(v)); break;
+    case "layout": {
+      const group = v === "board" && !["status","group","priority"].includes(state.group) ? "status" : state.group;
+      patch({ layout: v, group }); await saveViewPrefs(); await loadAll(); break;
+    }
     case "reverse":
       patch({ reverse: !state.reverse }); await saveViewPrefs(); await loadAll(); break;
     case "open": if(globalThis.QingdanAndroid)document.getElementById('app').classList.add('phone-detail');select(id); break;
@@ -1882,7 +1906,7 @@ async function countdownSave(id) {
 
 let externalRefreshBusy = false;
 function canRefreshExternal() {
-  if (!state.booted || state.busy || state.taskPage?.loading || document.hidden || !$("mask").hidden || $("rule-dialog")?.open) return false;
+  if (!state.booted || state.busy || state.taskPage?.loading || state.board?.columns_loading || state.board?.columns.some(c=>c.loading) || document.hidden || !$("mask").hidden || $("rule-dialog")?.open) return false;
   if (document.activeElement?.matches("input,textarea,select,[contenteditable=true]")) return false;
   if (["quickadd", "noteadd"].some(id => $(id)?.value.trim())) return false;
   if (state.detail && (("title" in state.detail.data && $("title") && $("title").value.trim() !== state.detail.data.title)
@@ -1920,7 +1944,13 @@ async function boot() {
     const el = ev.target;
     if (el.id === "scroll") {
       const editing = document.activeElement?.matches("input,textarea,select,[contenteditable=true]") || $("quickadd")?.value.trim();
-      if (state.layout === "list" && !editing && el.scrollTop > 0 && el.scrollHeight-el.clientHeight-el.scrollTop <= 4) changeTaskPage(1).catch(showError);
+      if (state.taskPage && !editing && el.scrollTop > 0 && el.scrollHeight-el.clientHeight-el.scrollTop <= 4) changeTaskPage(1).catch(showError);
+      return;
+    }
+    if (el.matches?.('.board-cards')) {
+      if (boardRestoring) return;
+      const editing = document.activeElement?.matches('input,textarea,select,[contenteditable=true]');
+      if (!editing && el.scrollTop>0 && el.scrollHeight-el.clientHeight-el.scrollTop<=4) changeBoardPage(el.dataset.column,1).catch(showError);
       return;
     }
     if (!el.matches?.(".catalog-scroll")) return;

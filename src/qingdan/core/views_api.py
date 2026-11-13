@@ -36,14 +36,13 @@ def _pool(tasks_only: bool = True):
 
 @feature(name="view.board", group="view", http=("GET", "/api/v1/views/board"), idempotent=True)
 def view_board(group_by: str = "status", list_id: str | None = None,
-               today: str | None = None) -> dict:
-    d = _today_or(today)
-    pool = [it for it in _pool() if view.is_alive(it)]
-    if list_id:
-        pool = [it for it in pool if it.data.get("list_id") == list_id]
-    names = _group_names(pool)
-    cols = view.board_columns(pool, group_by, names, d)
-    return {"group_by": group_by, "total": len(pool), "columns": cols, "list_names": names}
+               today: str | None = None, tag: str | None = None, name: str = "all",
+               include_done: bool = False, filter_id: str | None = None,
+               sort: str = "smart", reverse: bool = False, limit: int = 0, offset: int = 0,
+               column: str | None = None, columns_limit: int = 0, columns_offset: int = 0) -> dict:
+    from qingdan.core.board_query import query
+    return query(ctx.need_store(), _today_or(today), group_by, list_id, tag, name, include_done,
+                 filter_id, sort, reverse, limit, offset, column, columns_limit, columns_offset)
 
 
 # --------------------------------------------------------------------------- 日历

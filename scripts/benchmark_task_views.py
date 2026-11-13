@@ -71,14 +71,24 @@ def main():
                                                       offset=args.tasks // 2), args.repeat)
         counts, counts_metrics = measure(lambda: call('view.counts', today=today), args.repeat)
         stats, stats_metrics = measure(lambda: call('stats.today', today=today), args.repeat)
+        board, board_metrics = measure(lambda: call('view.board',group_by='group',today=today,
+                                                     limit=20,columns_limit=5),args.repeat)
+        column, column_metrics = measure(lambda: call('view.board',group_by='group',column='L0',
+                                                       today=today,limit=20,offset=20),args.repeat)
         assert [it['id'] for it in first['items']] == expected[:50]
         assert [it['id'] for it in middle['items']] == expected[args.tasks // 2:args.tasks // 2+50]
         assert counts['all'] == first['total'] == args.tasks
         assert stats['open_total'] == args.tasks // 4 * 2 + min(args.tasks % 4, 2)
+        assert len(board['columns']) == 5
+        assert len(board['items']) <= 100
+        expected_column = [item_id for item_id in expected if int(item_id[1:]) % 20 == 0]
+        assert [it['id'] for it in column['items']] == expected_column[20:40]
         report = {'tasks': args.tasks, 'repeat': args.repeat, 'python': platform.python_version(),
                   'platform': platform.platform(), 'page_size': 50,
                   'legacy_materialize_sort': old_metrics, 'first_page': first_metrics,
                   'middle_page': middle_metrics, 'counts': counts_metrics, 'stats': stats_metrics,
+                  'board_first_five_columns':board_metrics, 'board_column_second_page':column_metrics,
+                  'board_json_bytes':len(json.dumps(board).encode('utf-8')),
                   'first_page_json_bytes': len(json.dumps(first).encode('utf-8')),
                   'scope': 'Backend queries only; frontend rendering and Android performance not measured.'}
         store.db.close()
