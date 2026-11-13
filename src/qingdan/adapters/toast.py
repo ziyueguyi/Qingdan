@@ -99,7 +99,8 @@ class ToastChannel:
             self._notifier(title, body)
             return
         if backend == "balloon":
-            _tray_notifier(title, body)
+            if _tray_notifier(title, body) is False:
+                raise RuntimeError('Tray notification was not accepted')
             return
         if backend == "toast":
             from winotify import Notification

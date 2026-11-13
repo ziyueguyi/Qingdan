@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -125,3 +126,13 @@ def test_windows_balloon_click_queues_navigation_once_and_preserves_other_events
     assert events==['show','restore']
     icon._on_notify(2,0x202)
     assert events[-1]==(2,0x202)
+
+
+@pytest.mark.parametrize('accepted',[False,True,None])
+def test_windows_tray_rejection_is_not_reported_as_success(app_ctx,monkeypatch,accepted):
+    from qingdan.adapters import toast
+    monkeypatch.setattr(toast,'_tray_notifier',lambda title,body:accepted)
+    channel=toast.ToastChannel(lambda:{'master':True,'channels':{'toast':True}})
+    result=channel.send([AlertMessage(item_id='test',kind='task',title='test',fire_at_ms=1)])
+    assert result.ok==(accepted is not False)
+    if accepted is False:assert result.code=='NOTIFY_FAILED'

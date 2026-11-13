@@ -38,7 +38,7 @@ _FREQ_KEY = {"DAILY": "rp_daily", "WEEKLY": "rp_weekly",
 _FREQ_N_KEY = {"DAILY": "rp_every_n_days", "WEEKLY": "rp_every_n_weeks",
                "MONTHLY": "rp_every_n_months", "YEARLY": "rp_every_n_years"}
 
-#: 迭代上限。任何规则最多走这么多步，防死循环（畸形规则来自另一台机器时也不能挂）。
+#: 旧候选生成器的遍历边界；推进/预览按窗口定位，不把遍历预算视为规则结束。
 _MAX_STEPS = 5000
 
 
@@ -322,20 +322,8 @@ def next_after(due: Any, rule: Rule | str | None, anchor: Any = None) -> datetim
     `anchor` 是第一次的日期（`repeat_start`）。COUNT 与 INTERVAL 的对齐都靠它；
     缺失时退化为以 `due` 为锚 —— 老数据没有 anchor，宁可算得保守也不能抛。
     """
-    if rule is None:
-        return None
-    r = rule if isinstance(rule, Rule) else try_parse(rule)
-    if r is None:
-        return None
-    dt = _as_dt(due)
-    target = dt.date()
-    a = _as_dt(anchor).date() if anchor else target
-    if a > target:                             # anchor 晚于 due（用户改过到期日）→ 以 due 为准
-        a = target
-    for d in occurrences(a, r):
-        if d > target:
-            return dt.replace(year=d.year, month=d.month, day=d.day)
-    return None
+    values=upcoming(due,rule,n=1,anchor=anchor)
+    return values[0] if values else None
 
 
 def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
@@ -351,25 +339,9 @@ def upcoming(due: Any, rule: Rule | str | None, n: int = 5, anchor: Any = None,
     a = _as_dt(anchor).date() if anchor else target
     if a > target:
         a = target
-    end_d = _as_dt(end).date() if end else None
-    out: list[datetime] = []
-    try:
-        # Stop nominal iteration at the requested window before looking up an
-        # unknown future year. UNTIL and end both bound effective dates.
-        from dataclasses import replace
-        bounded = replace(r, until=min(r.until, end_d) if r.until and end_d else r.until or end_d)
-        for d in occurrences(a, bounded):
-            if d <= target:
-                continue
-            out.append(dt.replace(year=d.year, month=d.month, day=d.day))
-            if len(out) >= int(n):
-                break
-    except CalendarError as error:
-        if warnings is None:
-            raise
-        warnings.append({"key": "calendar_missing_year", "calendar_id": error.calendar_id,
-                         "year": error.year})
-    return out
+    from qingdan.core.recurrence_window import dates
+    values=dates(target,r,a,target,_as_dt(end).date() if end else date.max,warnings,limit=int(n))
+    return [dt.replace(year=d.year,month=d.month,day=d.day) for d in values]
 
 
 # --------------------------------------------------------------------------- 展示

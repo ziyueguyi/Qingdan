@@ -59,6 +59,12 @@ def _anchor_for(repeat: str | None, due_at: Any) -> str | None:
     """
     if not repeat:
         return None
+    rule=rrule.try_parse(repeat)
+    if rule and rule.workday and due_at:
+        # due_at is normalized by workday alignment. Keep its nominal anchor
+        # in the same wall-clock frame before syncing to another device.
+        parsed=parse_dt(due_at)
+        if parsed is not None:return _fmt_due_like(due_at,parsed)
     return due_at or None
 
 _TASK_FIELDS = {
@@ -406,6 +412,8 @@ def task_update(item_id: str, **changes: Any) -> dict:
     if "repeat" in changes:
         changes["repeat"] = _validate_repeat(changes["repeat"])   # 曾经原样收下任意串
     data.update(changes)
+    if 'remind_at' in changes:
+        _workday_reminder_frame(data)
     if any(key in changes and changes[key] != old.data.get(key) for key in ('due_at','repeat','remind_at')):
         data.pop('snoozed_until',None)
     if "list_id" in changes and changes["list_id"] != old.data.get("list_id") and "section_id" not in changes:
@@ -427,7 +435,7 @@ def _fmt_due_like(original: Any, dt: datetime) -> str:
     全天任务被推进成 `2026-11-07T00:00:00` 会在界面上多出个「00:00」，
     并且让 `due_all_day` 与 `due_at` 自相矛盾。
     """
-    if original and "T" not in str(original):
+    if original and all(marker not in str(original).strip() for marker in ('T','t',' ',':')):
         return dt.date().isoformat()
     return dt.replace(microsecond=0).isoformat()
 
@@ -450,10 +458,34 @@ def _align_workday_start(data: dict) -> None:
     effective = due.replace(year=first.year, month=first.month, day=first.day)
     delta = effective - due
     data["due_at"] = _fmt_due_like(data.get("due_at"), effective)
+    _workday_reminder_frame(data)
     if delta:
-        data["remind_at"] = [_fmt_due_like(value, parsed + delta)
-                             for value in data.get("remind_at", [])
-                             if (parsed := parse_dt(value)) is not None]
+        data["remind_at"] = _shift_reminders(data.get('remind_at') or [],delta)
+
+
+def _workday_reminder_frame(data):
+    rule=rrule.try_parse(data.get('repeat'))
+    if not rule or not rule.workday:return
+    values=data.get('remind_at')
+    if values is None:values=[]
+    if not isinstance(values,list):raise validation_error('remind_at 必须是日期时间数组')
+    normalized=[]
+    for value in values:
+        parsed=parse_dt(value)
+        if parsed is None:raise validation_error('remind_at 必须是 ISO8601 日期或时间')
+        normalized.append(_fmt_due_like(value,parsed))
+    data['remind_at']=normalized
+
+
+def _shift_reminders(values,delta):
+    """Preserve each reminder's own date/time shape and explicit UTC offset."""
+    shifted=[]
+    for value in values:
+        try:
+            parsed=value if isinstance(value,datetime) else datetime.fromisoformat(str(value).strip().replace('Z','+00:00'))
+        except (ValueError,TypeError):continue
+        shifted.append(_fmt_due_like(value,parsed+delta))
+    return shifted
 
 
 def _repeat_roll(old: Item, kind: str) -> tuple[dict, dict]:
@@ -506,8 +538,7 @@ def _repeat_roll(old: Item, kind: str) -> tuple[dict, dict]:
         data["done_at"] = None
     data.pop("snoozed_until", None)    # 贪睡只针对那一次，推进后必须失效
     # 提醒按同一位移平移，保住用户设的提前量 —— 否则任务滚到明天、提醒留在昨天。
-    rem = [t for t in (parse_dt(x) for x in (data.get("remind_at") or [])) if t]
-    data["remind_at"] = [_fmt_due_like(old.data.get("due_at"), t + delta) for t in rem]
+    data["remind_at"] = _shift_reminders(data.get('remind_at') or [],delta)
     extra.update(rolled=True, next_due_at=data["due_at"], occurrence=prev_due)
     return data, extra
 
@@ -804,6 +835,7 @@ def task_set_reminder(item_id: str, remind_at: list | None = None, mode: str = "
             raise validation_error("未知告警渠道", allowed=["toast", "dingtalk", "email"],
                                    got=sorted(bad))
     data = {**old.data, "remind_at": times, "remind_mode": mode, "alert_channels": channels}
+    _workday_reminder_frame(data)
     data.pop('snoozed_until',None)
     return _bump(old,data).to_dict()
 

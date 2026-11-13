@@ -13,11 +13,10 @@ from qingdan.core import rrule
 
 
 @lru_cache(maxsize=8)
-def _month_prefix(anchor, rule):
-    step = rule.interval * (12 if rule.freq == 'YEARLY' else 1)
-    period = 4800 // gcd(step, 4800)
+def _month_prefix(anchor, step, month_days, cycles):
+    rule=rrule.Rule(freq='MONTHLY',bymonthday=month_days)
     prefix = [0]
-    for k in range(period):
+    for k in range(cycles):
         # Equivalent month/year in the Gregorian 400-year cycle.
         index = (anchor.year % 400) * 12 + anchor.month - 1 + step*k
         year, month = index//12 % 400 + 2000, index % 12 + 1
@@ -25,7 +24,7 @@ def _month_prefix(anchor, rule):
     return tuple(prefix)
 
 
-def dates(due, rule, anchor, start, end, warnings=None):
+def dates(due, rule, anchor, start, end, warnings=None, limit=None):
     """Future occurrences, inclusive window, strictly after current due date."""
     if rule is None or start > end or due == date.max:
         return []
@@ -42,6 +41,8 @@ def dates(due, rule, anchor, start, end, warnings=None):
             for value in rrule.occurrences(a, replace(rule, until=end)):
                 if value >= lower:
                     result.append(value)
+                    if limit is not None and len(result)>=limit:
+                        break
         except rrule.CalendarError as error:
             if warnings is None:
                 raise
@@ -55,6 +56,8 @@ def dates(due, rule, anchor, start, end, warnings=None):
             return False
         if value >= lower:
             result.append(value)
+            if limit is not None and len(result)>=limit:
+                return False
         return True
     if rule.freq == 'DAILY' or (rule.freq == 'WEEKLY' and not rule.byday):
         step = rule.interval * (7 if rule.freq == 'WEEKLY' else 1)
@@ -86,8 +89,11 @@ def dates(due, rule, anchor, start, end, warnings=None):
             if not rule.bymonthday:
                 rank = k
             else:
-                prefix = _month_prefix(a, rule)
-                cycles, remainder = divmod(k,len(prefix)-1)
+                period=4800//gcd(step,4800)
+                # Count only history that actually exists; share the pattern
+                # across COUNT/UNTIL variants, which do not change month days.
+                prefix = _month_prefix(a,step,rule.bymonthday,min(k,period))
+                cycles, remainder = divmod(k,period)
                 rank = cycles*prefix[-1]+prefix[remainder]
                 rank -= sum(day<a.day for day in rrule._month_days(a.year,a.month,rule,a.day))
         while True:
