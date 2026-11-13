@@ -1,0 +1,49 @@
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_7c4b8330dfdde4 80,158,162-180,183-196
+  s_7909b70258899a::t_a3a9197044687b 181-182
+src/qingdan/web/app.css
+  s_7909b70258899a::t_87dc9520b2f6ec 559-561
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_bbeb9b9e905a55 10,281
+src/qingdan/web/store.js
+  s_7909b70258899a::t_39e63449504533 201-207
+docs/calendar-paging-browser-10000.json
+  s_7909b70258899a::t_7c4b8330dfdde4 1-12,14-20
+  s_7909b70258899a::t_a3a9197044687b 13
+src/qingdan/core/calendar_query.py
+  s_7909b70258899a::t_cb54d5ebdf3e8d 1,3-13,15-51,53-97
+  s_7909b70258899a::t_a043808d9ed166 2,14
+  s_7909b70258899a::t_2bebcb2fdeb344 52
+src/qingdan/web/app.js
+  s_7909b70258899a::t_335b1e2053500b 1-1655,1657,1659,1662-1663,1665-2096
+  s_7909b70258899a::t_1709850d3abdfe 1656,1658,1660-1661,1664
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidSmokeTest.java
+  s_7909b70258899a::t_59fef3f5873def 28-32
+src/qingdan/core/recurrence_window.py
+  s_7909b70258899a::t_9e05e18f9932f6 1-14,16-85,93-105
+  s_7909b70258899a::t_2bebcb2fdeb344 15,86-92
+tests/test_calendar_paging.py
+  s_7909b70258899a::t_2bebcb2fdeb344 86-109
+  s_7909b70258899a::t_65fab801e6fd1b 1-66,68-85
+  s_7909b70258899a::t_39e63449504533 67
+tests/test_recurring.py
+  s_7909b70258899a::t_65fab801e6fd1b 313-314,317,319-320
+src/qingdan/core/views_api.py
+  s_7909b70258899a::t_cb54d5ebdf3e8d 53-56,59-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "667df2625ec9f9b126ed19575ef0b86f1647d25d",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
