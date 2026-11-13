@@ -1,0 +1,78 @@
+src/qingdan/core/alert_api.py
+  s_7909b70258899a::t_fa5920b0d18353 38-39,47-50,67,70,74-77
+  s_7909b70258899a::t_3a438cd848fc3a 31-37,63-64
+  s_7909b70258899a::t_67fe0cc6094947 78-79
+src/qingdan/shell/app.py
+  s_7909b70258899a::t_e0e4e5601d324c 121-122,125-126,135
+src/qingdan/web/app.css
+  s_7909b70258899a::t_11e889119a2136 562-565
+src/qingdan/core/service.py
+  s_7909b70258899a::t_fa5920b0d18353 208,217
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_11e889119a2136 11,286
+  s_7909b70258899a::t_f009b87fe4fd7c 10,285
+src/qingdan/shell/tray.py
+  s_7909b70258899a::t_e0e4e5601d324c 38,44,75-77
+src/qingdan/core/store.py
+  s_7909b70258899a::t_fa5920b0d18353 133-147,248
+  s_7909b70258899a::t_3a438cd848fc3a 171-179,211,218-241,247
+  s_7909b70258899a::t_38db04d3726065 242-246
+src/qingdan/shell/notifications.py
+  s_7909b70258899a::t_e0e4e5601d324c 1-36
+tests/test_notification_inbox.py
+  s_7909b70258899a::t_7c13728122e965 1-127
+android/app/src/main/java/com/ziyueguyi/qingdan/NotificationBridge.java
+  s_7909b70258899a::t_e0e4e5601d324c 10-11,37,43-47,49-50,65,77
+  s_7909b70258899a::t_50b40c00f45258 14-20,42,48,51,68
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidNotificationActionsTest.java
+  s_7909b70258899a::t_8dcbeaa13a0d23 44,48-49,52,67-69,74-75,79
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidNotificationInboxTest.java
+  s_7909b70258899a::t_482d35040d2c9e 82-87
+  s_7909b70258899a::t_3fcb601b3a2c24 66-68,72
+  s_7909b70258899a::t_3cecf6d03212b1 1-65,69-71,73-81,88-109
+scripts/verify_windows_inbox.py
+  s_7909b70258899a::t_fe8bc3e5046eba 1-71,82-90
+  s_7909b70258899a::t_d06da6671a8fa4 72-81
+src/qingdan/core/access.py
+  s_7909b70258899a::t_fa5920b0d18353 128
+src/qingdan/adapters/toast.py
+  s_7909b70258899a::t_e0e4e5601d324c 118-119
+src/qingdan/web/app.js
+  s_7909b70258899a::t_585659f504b1f9 609
+  s_7909b70258899a::t_11e889119a2136 25-26,29,35-36,44,578,584-608,610-614,768-769,1537-1556,2077-2080
+scripts/verify_windows_notification.py
+  s_7909b70258899a::t_5111f16b3b5c47 1-37
+scripts/verify_android.sh
+  s_7909b70258899a::t_3cecf6d03212b1 4,8-10
+docs/通知操作设计与验收.md
+  s_7909b70258899a::t_98fde0936c793d 12-14,29,45-66,72-73,76-79
+  s_7909b70258899a::t_60b80b48f37a2f 75
+docs/notification-inbox-evidence.json
+  s_7909b70258899a::t_98fde0936c793d 1-22
+tests/test_notification_actions.py
+  s_7909b70258899a::t_38db04d3726065 153,168-179
+  s_7909b70258899a::t_3a438cd848fc3a 120-128,130-131,134,137-140,142,144-152,154,156-167,180-193
+  s_7909b70258899a::t_005ff426f24cb1 129,132-133,135-136,141,143,155
+src/qingdan/core/notification_inbox.py
+  s_7909b70258899a::t_fa5920b0d18353 1-61
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_60b80b48f37a2f 199-202
+android/app/src/main/python/qingdan_android.py
+  s_7909b70258899a::t_50b40c00f45258 28-33,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b7f554cf41ff648a29305383a2616e9526f57ede",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
