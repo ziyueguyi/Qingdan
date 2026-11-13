@@ -1,0 +1,72 @@
+src/qingdan/web/app.js
+  s_7909b70258899a::t_164d162a27ad81 175-179,1193-1196
+  s_7909b70258899a::t_468c599c447c00 58,248-264,334,336,1951
+  s_7909b70258899a::t_8b2719a123c277 11,265,333,341,1191-1192,1909,1947-1950,1952-1953
+src/qingdan/core/board_query.py
+  s_7909b70258899a::t_4ed8e4a34e231d 1-15,17-20,23-24,26-28,30,32-39,47-61,64-66
+  s_7909b70258899a::t_d9eac5e6f4ad0b 16,21-22
+  s_7909b70258899a::t_bc6ab882948ddd 25,29,31,40-46,62-63
+src/qingdan/web/store.js
+  s_7909b70258899a::t_0f83ab52227020 122,128
+  s_7909b70258899a::t_8b2719a123c277 173,292,316
+  s_7909b70258899a::t_e67b5285d292ce 282-291,294-295,297-315,317-325
+  s_7909b70258899a::t_468c599c447c00 296
+  s_7909b70258899a::t_3cf5f0142b6eca 191-194,205-212
+  s_7909b70258899a::t_36bcb86f430e1a 167
+  s_7909b70258899a::t_0c7c30bdaeafa0 293
+  s_7909b70258899a::t_d9eac5e6f4ad0b 12,16-18,21-41,164-166,168-172,174-183,326
+  s_7909b70258899a::t_a74f3e20d50a06 184-185
+  s_7909b70258899a::t_486991461a1065 327
+src/qingdan/core/views_api.py
+  s_7909b70258899a::t_4ed8e4a34e231d 39-45
+src/qingdan/web/task_pages.js
+  s_7909b70258899a::t_ccafe718d46c2c 64-70
+tests/test_board_pages_js.py
+  s_7909b70258899a::t_36bcb86f430e1a 1-19
+tests/test_board_paging.py
+  s_7909b70258899a::t_36bcb86f430e1a 1-53,57-69
+  s_7909b70258899a::t_468c599c447c00 54-56
+tests/test_task_paging.py
+  s_7909b70258899a::t_42ec22770a8764 118-124
+src/qingdan/core/task_query.py
+  s_7909b70258899a::t_05b299623d26c2 131,137
+  s_7909b70258899a::t_4ed8e4a34e231d 129,135
+  s_7909b70258899a::t_33fa33c45d4655 136,138
+src/qingdan/web/board_pages.js
+  s_7909b70258899a::t_8b2719a123c277 12,28,36-40,45,56,61-62
+  s_7909b70258899a::t_ccafe718d46c2c 1-11,13-27,29-35,41-44,46-55,58-60,63-74
+  s_7909b70258899a::t_177fe5b8b0a7a6 57
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_8b2719a123c277 89,91,359,361
+  s_7909b70258899a::t_164d162a27ad81 90,360
+tests/board_pages.mjs
+  s_7909b70258899a::t_a9fd1d10459148 62-76
+  s_7909b70258899a::t_36bcb86f430e1a 1-61,77
+scripts/benchmark_task_views.py
+  s_7909b70258899a::t_7cd9d5e5ff6b2b 74-77,82-85,90-91
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_e8e2f88d7b7c84 80,115-152
+  s_7909b70258899a::t_5c0227c3fd9a81 153
+src/qingdan/web/app.css
+  s_7909b70258899a::t_8b2719a123c277 432-436
+docs/board-paging-browser-10000.json
+  s_7909b70258899a::t_b7fdb87e63c3ed 1-42
+docs/task-views-10000-board.json
+  s_7909b70258899a::t_da722db800b370 1-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "32f990c9ea0cce7a92f3fafd1631a1a1cc288825",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
