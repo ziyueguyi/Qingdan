@@ -1,0 +1,43 @@
+tests/test_task_paging.py
+  s_7909b70258899a::t_450e84aa33035a 18,75
+  s_7909b70258899a::t_5d15ae0a2dc93e 71
+  s_7909b70258899a::t_2941b339fa5994 1-17,19-70,72-74,76-117
+docs/task-views-10000-backend.json
+  s_7909b70258899a::t_f5c211dddf1226 1-34
+src/qingdan/core/views_api.py
+  s_7909b70258899a::t_24f8eed7df456c 9,97-98,108-109,116
+  s_7909b70258899a::t_4764a4139d9c6a 134-149
+  s_7909b70258899a::t_3ac53eb0ead579 133,150-155,165-185
+scripts/benchmark_task_views.py
+  s_7909b70258899a::t_1021f6491559d7 77
+  s_7909b70258899a::t_237491bc5b6269 1-76,78-92
+src/qingdan/core/org.py
+  s_7909b70258899a::t_24f8eed7df456c 15,317,321-322,325
+src/qingdan/core/service.py
+  s_7909b70258899a::t_24f8eed7df456c 899,904-913
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_f5c211dddf1226 82
+  s_7909b70258899a::t_05152a916fdd9a 79-81
+  s_7909b70258899a::t_fcbc1a5dc689dc 40,54-78
+src/qingdan/core/task_query.py
+  s_7909b70258899a::t_c41c5d37341c14 1-7,10-27,35-95,99-104,108-138
+  s_7909b70258899a::t_24f8eed7df456c 8,96-98
+  s_7909b70258899a::t_450e84aa33035a 105-107
+  s_7909b70258899a::t_1021f6491559d7 9,28-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf0c9b6a51793c8347a83ffa625b7b618380efaa",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
