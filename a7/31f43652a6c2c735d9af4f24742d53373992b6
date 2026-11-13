@@ -1,0 +1,63 @@
+README.md
+  s_7909b70258899a::t_e43870e475ce68 4,17,25-26,34-35,43-44,89-90
+docs/notification-inbox-evidence.json
+  s_7909b70258899a::t_0399b5f16a1976 2-30,32-49,51-63
+src/qingdan/core/recurrence_window.py
+  s_7909b70258899a::t_629fe857ddd263 16-17,19,92-96
+  s_7909b70258899a::t_c709831f22b910 27,44-45,59-60
+pyproject.toml
+  s_7909b70258899a::t_e43870e475ce68 7
+src/qingdan/adapters/toast.py
+  s_7909b70258899a::t_2c7e11ec66b616 102-103
+src/qingdan/core/service.py
+  s_7909b70258899a::t_a1efc1f4eb1fcd 415-416,461,466-468,471-479,838
+  s_7909b70258899a::t_671079d87f4491 469-470
+  s_7909b70258899a::t_0d9d85dc697b7b 62-67,463,480-488,541
+  s_7909b70258899a::t_44ed944500f963 438
+  s_7909b70258899a::t_7b9d2b8465ec05 464-465
+docs/通知操作设计与验收.md
+  s_7909b70258899a::t_f15a4f3eae657e 71-72
+  s_7909b70258899a::t_1935ef595fbaa5 69-70,73-76
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_ff24f878aca5ca 199-202
+tests/test_recurrence_history.py
+  s_7909b70258899a::t_629fe857ddd263 95-108
+  s_7909b70258899a::t_75efb4fe6e4089 62-75
+  s_7909b70258899a::t_52a1df7e2331ce 1-61,76-79,81-94
+  s_7909b70258899a::t_ab85d80001e376 80
+.github/workflows/build.yml
+  s_7909b70258899a::t_e43870e475ce68 204,230-235
+src/qingdan/__init__.py
+  s_7909b70258899a::t_e43870e475ce68 3
+docs/releases/0.4.0.md
+  s_7909b70258899a::t_e43870e475ce68 1-4,6-13,15-29
+  s_7909b70258899a::t_c8a1d363b713b4 5,14
+docs/后续优化目标与执行计划.md
+  s_7909b70258899a::t_3b3be0f88e47db 42
+tests/test_notification_inbox.py
+  s_7909b70258899a::t_2c7e11ec66b616 3,129-138
+tests/test_workday_time_frames.py
+  s_7909b70258899a::t_fafaaadfc1675c 1-5,7-24,29-34,38-43,46,48-57
+  s_7909b70258899a::t_44ed944500f963 44-45,47
+  s_7909b70258899a::t_a1efc1f4eb1fcd 25-28,35-37
+  s_7909b70258899a::t_671079d87f4491 6,58-66
+src/qingdan/core/rrule.py
+  s_7909b70258899a::t_ab85d80001e376 41
+  s_7909b70258899a::t_c709831f22b910 325-326,342-344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a731f43652a6c2c735d9af4f24742d53373992b6",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
