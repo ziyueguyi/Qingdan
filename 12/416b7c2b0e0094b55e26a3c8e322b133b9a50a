@@ -1,0 +1,25 @@
+src/qingdan/core/workdays.py
+  s_7909b70258899a::t_8a1235c3a38cea 49,55
+src/qingdan/web/app.js
+  s_7909b70258899a::t_8a1235c3a38cea 438,1667
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_8a1235c3a38cea 88,352
+src/qingdan/core/rrule.py
+  s_7909b70258899a::t_8a1235c3a38cea 371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12416b7c2b0e0094b55e26a3c8e322b133b9a50a",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
