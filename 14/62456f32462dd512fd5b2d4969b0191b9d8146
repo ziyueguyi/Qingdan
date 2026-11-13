@@ -1,0 +1,65 @@
+src/qingdan/core/task_query.py
+  s_7909b70258899a::t_35a8c46d8c836f 133
+  s_7909b70258899a::t_59f1c1135e6bd1 134-140
+docs/0.4.0-规则与性能设计.md
+  s_7909b70258899a::t_d6f7312bebd04c 38,63,76-77,80-113
+docs/task-paging-browser-10000.json
+  s_7909b70258899a::t_fbe5c0ee27e351 1-36
+tests/task_pages.mjs
+  s_7909b70258899a::t_a40f0ba5d1253a 1-73
+src/qingdan/core/views_api.py
+  s_7909b70258899a::t_cc318b063a1980 108-123,134-158,168-188
+src/qingdan/web/app.css
+  s_7909b70258899a::t_629db4c4db6563 429-431
+src/qingdan/core/service.py
+  s_7909b70258899a::t_c0347ffd7fe1bb 208-222
+src/qingdan/core/store.py
+  s_7909b70258899a::t_59f1c1135e6bd1 138-155,165,278-282
+  s_7909b70258899a::t_7fdf67e7754624 13,283-294
+tests/test_change_revision.py
+  s_7909b70258899a::t_4679c54647c0d2 73-89
+  s_7909b70258899a::t_35a8c46d8c836f 1-17,19-20,22-72
+  s_7909b70258899a::t_1199f9d9583519 90-133
+  s_7909b70258899a::t_604ebc2157dc5d 18,21
+docs/task-views-10000-backend.json
+  s_7909b70258899a::t_d6f7312bebd04c 8-9,13-15,18-20,23-24,28-29,32
+src/qingdan/web/app.js
+  s_7909b70258899a::t_629db4c4db6563 11,242-244,255-256,267,269-273,288-298,1170,1475-1476,1885,1897,1921-1925
+  s_7909b70258899a::t_27060a4410cc50 262,274-287
+  s_7909b70258899a::t_66605642d7dd89 1933
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_66605642d7dd89 88
+  s_7909b70258899a::t_629db4c4db6563 89-90,355-357
+tests/test_task_pages_js.py
+  s_7909b70258899a::t_a40f0ba5d1253a 1-18
+tests/test_search.py
+  s_7909b70258899a::t_5551e3d0fda1bd 56-59
+src/qingdan/web/task_pages.js
+  s_7909b70258899a::t_222e4a567d7ad7 44
+  s_7909b70258899a::t_a4589ff6f689a3 1-43,45-64
+src/qingdan/core/org.py
+  s_7909b70258899a::t_cc318b063a1980 319-330
+src/qingdan/web/store.js
+  s_7909b70258899a::t_222e4a567d7ad7 11-14,35,97,110,113-116,118-123,125,127-129,131-134,136-137,140-141,145-147,174,176,178,200,205-207,210-211,213-217,219-235
+  s_7909b70258899a::t_66605642d7dd89 130,135
+  s_7909b70258899a::t_a40f0ba5d1253a 124
+  s_7909b70258899a::t_59f1c1135e6bd1 117,218
+  s_7909b70258899a::t_629db4c4db6563 15,96,111-112,126,192,198,208-209,212
+  s_7909b70258899a::t_bdea80663b4aca 236-237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1462456f32462dd512fd5b2d4969b0191b9d8146",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
