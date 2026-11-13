@@ -559,3 +559,7 @@ html[data-platform=android] .settings-modal{height:92dvh!important}
 .calendar-more{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text-3);cursor:pointer}
 .calendar-day-events{max-height:55dvh;overflow-y:auto;overscroll-behavior:contain;margin-top:12px}
 .calendar-day-event{display:block;width:100%;text-align:left;margin-bottom:6px;white-space:normal;overflow-wrap:anywhere}
+.notification-events{max-height:55dvh;overflow-y:auto;overscroll-behavior:contain}
+.notification-event{padding:10px 0;border-bottom:1px solid var(--line)}
+.notification-event>button{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.notification-event .btnrow{margin-top:8px;flex-wrap:wrap}

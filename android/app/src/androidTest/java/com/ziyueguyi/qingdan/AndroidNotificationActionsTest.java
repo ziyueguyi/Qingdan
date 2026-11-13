@@ -41,16 +41,15 @@ public class AndroidNotificationActionsTest {
         }
         return null;
     }
-    private List<WorkInfo> finished(String id,int count) throws Exception {
+    private WorkInfo finished(String id,java.util.UUID previous) throws Exception {
         List<WorkInfo> items=null;
         for(int i=0;i<120;i++){
             items=WorkManager.getInstance(context()).getWorkInfosByTag("notification-action:"+id).get(5,TimeUnit.SECONDS);
-            boolean done=items.size()>=count;
-            for(WorkInfo item:items)done&=item.getState().isFinished();
-            if(done)return items;
+            for(WorkInfo item:items)
+                if(item.getState().isFinished()&&!item.getId().equals(previous))return item;
             Thread.sleep(250);
         }
-        fail("Notification work did not finish: "+items);return items;
+        fail("Notification work did not finish: "+items);return null;
     }
     @Test public void buttonsBindSnapshotsAndColdStartOpensTask() throws Exception {
         if(Build.VERSION.SDK_INT>=33)InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(context().getPackageName(),android.Manifest.permission.POST_NOTIFICATIONS);
@@ -65,19 +64,19 @@ public class AndroidNotificationActionsTest {
             assertNotNull(na);assertNotNull(nb);assertEquals(2,na.actions.length);assertEquals(2,nb.actions.length);
             assertNotEquals(na.actions[0].actionIntent,nb.actions[0].actionIntent);
             na.actions[0].actionIntent.send();
-            List<WorkInfo> firstJobs=finished(firstId,1);
-            assertEquals(WorkInfo.State.SUCCEEDED,firstJobs.get(0).getState());
-            assertEquals("completed",firstJobs.get(0).getOutputData().getString("status"));
+            WorkInfo firstJob=finished(firstId,null);
+            assertEquals(WorkInfo.State.SUCCEEDED,firstJob.getState());
+            assertEquals("completed",firstJob.getOutputData().getString("status"));
             assertEquals("2030-01-02",task(firstId).getJSONObject("data").getString("due_at"));
             JSONObject newer=payload(task(firstId),a.getLong("fire_at"));
             assertTrue(NotificationBridge.postItem("New occurrence","Test",newer.toString()));
             na.actions[0].actionIntent.send();
-            List<WorkInfo> repeated=finished(firstId,2);
-            assertTrue(repeated.stream().anyMatch(w->"stale".equals(w.getOutputData().getString("status"))));
+            WorkInfo repeated=finished(firstId,firstJob.getId());
+            assertEquals("stale",repeated.getOutputData().getString("status"));
             assertEquals("2030-01-02",task(firstId).getJSONObject("data").getString("due_at"));
             assertEquals("Old action replaced the newer notification",2,notification(newer).actions.length);
             nb.actions[1].actionIntent.send();
-            assertEquals("snoozed",finished(secondId,1).get(0).getOutputData().getString("status"));
+            assertEquals("snoozed",finished(secondId,null).getOutputData().getString("status"));
             assertEquals("2030-01-01",task(secondId).getJSONObject("data").getString("due_at"));
             assertTrue(task(secondId).getJSONObject("data").has("snoozed_until"));
             // A fresh Activity receives an OS notification intent before JS boots.

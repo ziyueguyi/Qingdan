@@ -22,16 +22,18 @@ const SWATCHES = ["#e5484d", "#e8912d", "#3b82f6", "#0f9d8e", "#7457e8"];
 
 let openingNotification = false;
 async function openPendingNotification() {
-  if (openingNotification || !state.booted || !globalThis.QingdanAndroid?.takeNotification) return;
+  const bridge=globalThis.QingdanAndroid || globalThis.pywebview?.api;
+  if (openingNotification || !state.booted || !bridge?.takeNotification) return;
   openingNotification = true;
   try {
-    const raw = globalThis.QingdanAndroid.takeNotification();
+    const raw = await bridge.takeNotification();
     if (!raw) return;
     const payload = JSON.parse(raw);
-    if (typeof payload.item_id !== 'string') return;
     // Activity extras can be supplied externally: navigation always forces open,
     // and never executes an action or trusts a caller-supplied feature name.
     if (!$('mask').hidden && !confirm(t('notification_leave_dialog'))) return;
+    if (payload.inbox === true) { await openNotificationInbox(); return; }
+    if (typeof payload.item_id !== 'string') return;
     const target = await call('alert.notification_action',{item_id:payload.item_id,action:'open'});
     if (target.status === 'gone') { showError(new Error(t('notification_gone'))); return; }
     if (target.status !== 'open') return;
@@ -39,7 +41,7 @@ async function openPendingNotification() {
     $('mask').hidden = true;
     if (target.kind === 'countdown') await openCountdownDialog(target.item_id);
     else {
-      $('app').classList.add('phone-detail');
+      if(globalThis.QingdanAndroid)$('app').classList.add('phone-detail');
       await select(target.item_id);
     }
   } catch(error) { showError(error); }
@@ -573,9 +575,41 @@ function openModal(html, fixed = false) {
   $('modal').classList.remove('settings-modal');
   const m = $("modal");
   delete m.dataset.calendarDay;
+  delete m.dataset.notificationInbox;
   m.innerHTML = html;
   m.classList.toggle("fixed", fixed);
   $("mask").hidden = false;
+}
+
+let notificationInbox=null;
+async function openNotificationInbox(offset=0,reset=false){
+  const modal=$('modal');
+  if(!notificationInbox || $('mask').hidden || modal.dataset.notificationInbox!==notificationInbox.key){
+    notificationInbox={key:String(Date.now())+'-'+Math.random(),pager:new TaskPager(call),loading:false,offset:0};
+    openModal(`<div class="mh">${esc(t('notification_inbox'))}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb">${esc(t('task_page_loading'))}</div>`);
+    modal.dataset.notificationInbox=notificationInbox.key;
+  }
+  const context=notificationInbox;
+  if(context.loading)return;
+  context.loading=true;
+  const active=()=>notificationInbox===context&&!$('mask').hidden&&modal.dataset.notificationInbox===context.key;
+  modal.querySelectorAll('button').forEach(b=>{if(b.dataset.act!=='close-modal')b.disabled=true;});
+  try{
+    let page;
+    for(let attempt=0;attempt<3;attempt++){
+      const health=await call('app.health');
+      if(!active())return;
+      const changed=context.pager.configure('alert.notification_list',{},[health.task_token,health.notification_token]);
+      if(changed||reset)offset=0;
+      try{page=await context.pager.get(offset);break;}catch(error){if(error.code!=='PAGE_CHANGED'||attempt===2)throw error;}
+    }
+    if(!active())return;
+    context.offset=page.offset;context.page=page;
+    const nav=`<nav class="task-pager"><button class="btn" data-act="notification-page" data-v="-1" ${!page.offset?'disabled':''}>${esc(t('previous_page'))}</button><span>${esc(t('board_card_range',{start:page.total?page.offset+1:0,end:page.offset+page.items.length,total:page.total}))}</span><button class="btn" data-act="notification-page" data-v="1" ${!page.has_more?'disabled':''}>${esc(t('next_page'))}</button></nav>`;
+    modal.innerHTML=`<div class="mh">${esc(t('notification_inbox'))}<button class="iconbtn" data-act="close-modal">×</button></div><div class="mb">${nav}<div class="notification-events">${page.items.map(item=>`<div class="notification-event"><button class="btn" data-act="notification-open" data-id="${esc(item.id)}" ${item.status==='gone'?'disabled':''}>${esc(item.title||t('notification_gone'))}</button>${item.status!=='open'?`<p>${esc(t('notification_'+item.status))}</p>`:''}<div class="btnrow">${item.kind==='task'&&item.status==='open'?`<button class="btn" data-act="notification-action" data-id="${esc(item.id)}" data-v="complete" data-rev="${esc(JSON.stringify(item.expected_rev))}">${esc(t('complete'))}</button><button class="btn" data-act="notification-action" data-id="${esc(item.id)}" data-v="snooze" data-rev="${esc(JSON.stringify(item.expected_rev))}">${esc(t('notification_snooze'))}</button>`:''}<button class="btn" data-act="notification-action" data-id="${esc(item.id)}" data-v="dismiss" data-rev="${esc(JSON.stringify(item.expected_rev))}">${esc(t('notification_dismiss'))}</button></div></div>`).join('')||`<p>${esc(t('empty_list'))}</p>`}</div></div>`;
+    context.pager.warm(offset,page);
+  }catch(error){if(active()){showError(error);modal.querySelector('.mb').innerHTML=`<button class="btn" data-act="notification-inbox">${esc(t('retry'))}</button>`;}}
+  finally{context.loading=false;}
 }
 
 let calendarDay = null;
@@ -731,7 +765,8 @@ function renderAlertTab() {
         <span class="desc">${esc(t("digest_d"))}</span></div></div>
     <div class="field"><label></label><div class="ctl" style="display:flex;gap:8px">
       <button class="btn" data-act="alert-silence">🔕 ${esc(t("bell_off"))} 30min</button>
-      <button class="btn" data-act="alert-preview">👁 ${esc(t("nav_stat"))}</button></div></div>
+      <button class="btn" data-act="alert-preview">👁 ${esc(t("nav_stat"))}</button>
+      <button class="btn" data-act="notification-inbox">${esc(t('notification_inbox'))}</button></div></div>
     <div class="group-t" style="margin-top:14px">${esc(t("alert_log_t"))}</div>
     <div class="field"><label></label><div class="ctl">
       <button class="btn" data-act="alert-log">${esc(t("alert_log_btn"))}</button>
@@ -1499,6 +1534,26 @@ async function onClick(ev) {
     case "alert-digest": await alertSave({ digest: { enabled: !state.alertConfig.digest.enabled } }); break;
     case "alert-test": await alertTest(name); break;
     case "alert-preview": await alertPreview(); break;
+    case "notification-inbox": await openNotificationInbox(); break;
+    case "notification-page": await openNotificationInbox(notificationInbox.offset+Number(v)*50); break;
+    case "notification-open": {
+      const target=await call('alert.notification_action',{item_id:id,action:'open'});
+      if(target.status==='gone'){showError(new Error(t('notification_gone')));break;}
+      $('mask').hidden=true;
+      if(target.kind==='countdown')await openCountdownDialog(id);
+      else{if(globalThis.QingdanAndroid)$('app').classList.add('phone-detail');select(id);}
+      break;
+    }
+    case "notification-action": {
+      el.disabled=true;
+      try{
+        const result=await call('alert.notification_action',{item_id:id,action:v,expected_rev:JSON.parse(el.dataset.rev),minutes:10});
+        if(!['completed','snoozed','dismissed'].includes(result.status))showError(new Error(t('notification_'+result.status)));
+        await openNotificationInbox(0,true);
+        if(v!=='dismiss')await loadAll();
+      }finally{if(el.isConnected)el.disabled=false;}
+      break;
+    }
     case "alert-silence":
       try { await call("alert.silence", { minutes: 30 }); snackbar(t("bell_off"), false); }
       catch (e) { showError(e); }
@@ -2019,6 +2074,10 @@ async function boot() {
   });
   document.addEventListener("scroll", ev => {
     const el = ev.target;
+    if(el.matches?.('.notification-events')){
+      if(notificationInbox?.page?.has_more&&!notificationInbox.loading&&el.scrollTop>0&&el.scrollHeight-el.clientHeight-el.scrollTop<=4)openNotificationInbox(notificationInbox.offset+50).catch(showError);
+      return;
+    }
     if (el.matches?.('.calendar-day-events')) {
       if (calendarDay?.page?.has_more && !calendarDay.loading && el.scrollTop>0 && el.scrollHeight-el.clientHeight-el.scrollTop<=4) openCalendarDay(calendarDay.date,calendarDay.offset+50).catch(showError);
       return;

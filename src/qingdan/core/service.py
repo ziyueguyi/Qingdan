@@ -205,6 +205,7 @@ def _smart_key(it: Item) -> tuple:
 def health() -> dict:
     """存活探针 + 侧栏徽标计数。不需要登录，供外部脚本与冒烟测试使用。"""
     st = ctx.need_store()
+    from qingdan.core.notification_inbox import token as notification_token
     with st.read_snapshot():
         return {
             "ok": True,
@@ -213,6 +214,7 @@ def health() -> dict:
             **st.health_counts(),
             "change_token": st.change_token(),
             "task_token": st.task_change_token(),
+            "notification_token": notification_token(st),
             "today": stamp.now_day(),
             "authed": ctx.authed,
             "data_dir": str(ctx.data_dir),

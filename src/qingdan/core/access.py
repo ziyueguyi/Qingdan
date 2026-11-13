@@ -125,7 +125,7 @@ def policy(name: str, raw: dict | None = None) -> set[str] | None:
     f = REGISTRY[name]
     group, action = name.split('.',1)
     if (group in {'access','auth'} or name.startswith('app.autostart')
-            or name in {'app.instance_status','alert.notification_action'}):
+            or name in {'app.instance_status','alert.notification_action','alert.notification_list'}):
         return None
     special = {
         'autosync.config_set': {'create','update','delete','execute'},

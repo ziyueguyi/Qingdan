@@ -118,9 +118,12 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
     from qingdan.core.autosync import loop as auto_sync
     auto_sync.start()
 
+    from qingdan.shell.notifications import NotificationHost
+    notification_host=NotificationHost()
     window = webview.create_window(
         "清单", f"http://127.0.0.1:{port}/",
-        width=width, height=height, min_size=(900, 600), text_select=True)
+        width=width, height=height, min_size=(900, 600), text_select=True,js_api=notification_host)
+    notification_host._window=window
 
     quitting = {"v": False}
     tray = Tray(
@@ -129,6 +132,7 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
         on_toggle_alerts=lambda: _toggle_alerts(),
         is_visible=lambda: True,
         alerts_enabled=lambda: bool(alert_config.get_config()["master"]),
+        on_notification=notification_host._open,
     )
 
     def on_closing():

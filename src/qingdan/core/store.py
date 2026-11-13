@@ -130,6 +130,21 @@ CREATE TABLE IF NOT EXISTS alert_log (
   detail   TEXT NOT NULL
 );
 
+-- Device-local notification inbox. No row is serialized into sync Items.
+CREATE TABLE IF NOT EXISTS notification_item (
+  item_id TEXT PRIMARY KEY, kind TEXT NOT NULL, revision TEXT NOT NULL,
+  fire_at INTEGER NOT NULL, received_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notification_received ON notification_item(received_at DESC,item_id);
+CREATE TABLE IF NOT EXISTS notification_revision(id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL);
+INSERT OR IGNORE INTO notification_revision(id,value) VALUES(1,0);
+CREATE TRIGGER IF NOT EXISTS notification_insert AFTER INSERT ON notification_item BEGIN
+  UPDATE notification_revision SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS notification_update AFTER UPDATE ON notification_item BEGIN
+  UPDATE notification_revision SET value=value+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS notification_delete AFTER DELETE ON notification_item BEGIN
+  UPDATE notification_revision SET value=value+1 WHERE id=1; END;
+
 -- 密钥：DPAPI 密文，绑定当前 Windows 用户 + 本机（换机需重填）
 CREATE TABLE IF NOT EXISTS secret (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 """
@@ -151,6 +166,15 @@ INSERT OR IGNORE INTO change_revision(id,items,metadata) VALUES(1,0,0);
                           ("view_pref", "metadata"), ("sync_state", "metadata"))
     for operation in ("INSERT", "UPDATE", "DELETE")
 )
+
+
+class _Connection(sqlite3.Connection):
+    """Keep existing commit behavior, except inside an explicit atomic scope."""
+    _deferred_commits=0
+
+    def commit(self):
+        if not self._deferred_commits:
+            return super().commit()
 
 
 class Store:
@@ -184,12 +208,43 @@ class Store:
         """
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(str(self.path), timeout=10)
+            conn = sqlite3.connect(str(self.path), timeout=10,factory=_Connection)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA foreign_keys=ON")
             self._local.conn = conn
         return conn
+
+    @contextmanager
+    def atomic_write(self):
+        """Hold SQLite's writer reservation across service-level commits.
+
+        operation_lock serializes one process; BEGIN IMMEDIATE also protects
+        against another local CLI process. A caller's transaction is preserved.
+        """
+        db=self.db
+        depth=db._deferred_commits
+        owned=not db.in_transaction
+        savepoint=f'qd_atomic_{depth}'
+        db.execute('BEGIN IMMEDIATE' if owned else f'SAVEPOINT {savepoint}')
+        db._deferred_commits=depth+1
+        try:
+            yield
+        except BaseException:
+            db._deferred_commits=depth
+            if owned:sqlite3.Connection.rollback(db)
+            else:
+                db.execute(f'ROLLBACK TO {savepoint}')
+                db.execute(f'RELEASE {savepoint}')
+            raise
+        else:
+            db._deferred_commits=depth
+            if owned:
+                try:sqlite3.Connection.commit(db)
+                except BaseException:
+                    sqlite3.Connection.rollback(db)
+                    raise
+            else:db.execute(f'RELEASE {savepoint}')
 
     # ------------------------------------------------------------------ 时钟
     def next_rev(self) -> Rev:

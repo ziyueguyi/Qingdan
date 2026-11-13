@@ -7,8 +7,17 @@ import android.net.Uri;
 import android.service.notification.StatusBarNotification;
 import org.json.JSONObject;
 public final class NotificationBridge {
+    private static final java.util.LinkedHashSet<String> recentTags=new java.util.LinkedHashSet<>();
+    private static boolean seededTags=false;
     public static final String PAYLOAD="qingdan_notification", SNAPSHOT="qingdan_snapshot";
     public static String tag(JSONObject payload){return "item:"+payload.optString("item_id")+":"+payload.optLong("fire_at");}
+    public static boolean postSummary(int count){
+        try{
+            JSONObject payload=new JSONObject().put("item_id","__inbox__").put("kind","inbox").put("inbox",true).put("fire_at",0);
+            if(count==0){QingdanApplication.get().getSystemService(NotificationManager.class).cancel(tag(payload),0);return true;}
+            return show("清单提醒",count+" 条提醒，点击分页查看",payload,"summary");
+        }catch(Exception error){return false;}
+    }
     public static boolean postItem(String title,String body,String raw){
         try{return show(title,body,new JSONObject(raw),null);}catch(Exception error){return false;}
     }
@@ -25,11 +34,21 @@ public final class NotificationBridge {
         }
         return PendingIntent.getBroadcast(context,0,value,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
-    private static boolean show(String title,String body,JSONObject payload,String feedback) throws Exception {
+    private static synchronized boolean show(String title,String body,JSONObject payload,String feedback) throws Exception {
         Context context=QingdanApplication.get();
         if(Build.VERSION.SDK_INT>=33&&context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return false;
         NotificationManager manager=context.getSystemService(NotificationManager.class);
         if(!manager.areNotificationsEnabled())return false;
+        if(!payload.optBoolean("inbox")){
+            if(!seededTags){
+                for(StatusBarNotification current:manager.getActiveNotifications()){
+                    if(current.getTag()!=null&&current.getTag().startsWith("item:")&&!current.getTag().startsWith("item:__inbox__:"))recentTags.add(current.getTag());
+                }
+                seededTags=true;
+            }
+            recentTags.remove(tag(payload));recentTags.add(tag(payload));
+            while(recentTags.size()>20){String oldest=recentTags.iterator().next();recentTags.remove(oldest);manager.cancel(oldest,0);}
+        }
         if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(new NotificationChannel("tasks","清单提醒",NotificationManager.IMPORTANCE_DEFAULT));
         Notification.Builder builder=(Build.VERSION.SDK_INT>=26?new Notification.Builder(context,"tasks"):new Notification.Builder(context)).setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title).setContentText(body).setStyle(new Notification.BigTextStyle().bigText(body))
@@ -43,9 +62,10 @@ public final class NotificationBridge {
         }
         manager.notify(tag(payload),0,builder.build());return true;
     }
-    public static void finishAction(String raw,String response){
+    public static synchronized void finishAction(String raw,String response){
         try{
             JSONObject payload=new JSONObject(raw),reply=new JSONObject(response);
+            if(reply.optBoolean("ok")&&reply.getJSONObject("data").has("inbox_total"))postSummary(reply.getJSONObject("data").getInt("inbox_total"));
             NotificationManager manager=QingdanApplication.get().getSystemService(NotificationManager.class);
             String snapshot=payload.getJSONObject("expected_rev").toString();
             boolean current=false;
@@ -54,7 +74,7 @@ public final class NotificationBridge {
             }
             if(!current)return; // Never cancel or replace a newer notification.
             String status=reply.optBoolean("ok")?reply.getJSONObject("data").optString("status"):"error";
-            if("completed".equals(status)||"snoozed".equals(status)||"gone".equals(status)||"inactive".equals(status))manager.cancel(tag(payload),0);
+            if("completed".equals(status)||"snoozed".equals(status)||"gone".equals(status)||"inactive".equals(status)){manager.cancel(tag(payload),0);recentTags.remove(tag(payload));}
             else show("清单提醒","stale".equals(status)?"任务已变化，请打开查看":"操作未完成，请打开应用查看",payload,status);
         }catch(Exception error){android.util.Log.e("Qingdan","Notification result could not be displayed",error);}
     }

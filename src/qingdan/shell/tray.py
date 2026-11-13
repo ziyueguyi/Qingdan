@@ -35,12 +35,13 @@ def icon_candidates(icon_path: Path | None = ()) -> list[Path]:
 class Tray:
     """pystray 托盘。没装 pystray 或没有图标文件时整体降级为不可用，不影响主流程。"""
 
-    def __init__(self, on_show, on_quit, on_toggle_alerts, is_visible, alerts_enabled):
+    def __init__(self, on_show, on_quit, on_toggle_alerts, is_visible, alerts_enabled,on_notification=None):
         self._on_show = on_show
         self._on_quit = on_quit
         self._on_toggle_alerts = on_toggle_alerts
         self._is_visible = is_visible
         self._alerts_enabled = alerts_enabled
+        self._on_notification=on_notification or on_show
         self.icon = None
         self._thread: threading.Thread | None = None
         self.available = False
@@ -71,7 +72,9 @@ class Tray:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", self._handle_quit),
         )
-        self.icon = pystray.Icon("qingdan", image, APP_NAME, menu)
+        from qingdan.shell.notifications import notification_icon
+        icon_type=notification_icon(pystray.Icon,self._on_notification) if sys.platform=='win32' else pystray.Icon
+        self.icon = icon_type("qingdan", image, APP_NAME, menu)
         self._thread = threading.Thread(target=self.icon.run, daemon=True, name="qingdan-tray")
         self._thread.start()
         # run() 是异步起循环的，等它真的就绪再返回，否则第一次 notify 可能落空

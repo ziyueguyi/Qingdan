@@ -115,6 +115,8 @@ class ToastChannel:
             return SendResult(ok=True, sent_count=0, covered=0)
         title, body = self.compose(msgs)
         try:
+            from qingdan.core.notification_inbox import capture
+            capture(msgs)
             self._show(title, body)
             return SendResult(ok=True, sent_count=len(msgs), covered=len(msgs),
                               detail={"backend": self.backend})

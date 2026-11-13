@@ -7,6 +7,8 @@
 
 const DICT = {
   zh: {
+    notification_inbox:'提醒记录', notification_dismiss:'移除提醒记录',notification_snooze:'稍后 10 分钟',
+    notification_stale:'任务已变化，请打开当前任务查看。',notification_inactive:'任务已完成或取消。',notification_unsupported:'此提醒不支持该操作。',
     notification_gone: '提醒对应的任务已删除或不存在。',
     notification_leave_dialog: '打开提醒任务将关闭当前弹窗，未保存内容会丢失，继续吗？',
     calendar_events: '查看当日全部任务',
@@ -280,6 +282,8 @@ const DICT = {
     data_dir: "数据目录",
   },
   en: {
+    notification_inbox:'Reminder inbox',notification_dismiss:'Dismiss reminder',notification_snooze:'Snooze 10 minutes',
+    notification_stale:'This item changed. Open it to view the current version.',notification_inactive:'This task is completed or cancelled.',notification_unsupported:'This action is unavailable for this reminder.',
     notification_gone: 'The item for this reminder was deleted or no longer exists.',
     notification_leave_dialog: 'Open the reminder and close this dialog? Unsaved changes will be lost.',
     calendar_events: 'View all events on this day',
