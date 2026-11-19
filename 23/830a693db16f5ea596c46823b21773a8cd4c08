@@ -1,0 +1,16 @@
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidDeviceRecoveryTest.java
+  h_756b7de6229b75 137-138
+docs/后续优化目标与执行计划.md
+  h_756b7de6229b75 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "23830a693db16f5ea596c46823b21773a8cd4c08",
+  "prompts": {},
+  "humans": {
+    "h_756b7de6229b75": {
+      "author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
