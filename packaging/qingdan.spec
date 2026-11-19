@@ -94,6 +94,7 @@ a = Analysis(
     pathex=[str(SRC)],
     binaries=[],
     datas=[(str(WEB), "qingdan/web"), (str(CLI_LAUNCHER), "."),
+           (str(SRC / 'qingdan/core/release-notes.json'), 'qingdan/core'),
            # 托盘运行时用 PIL 打开 PNG（.ico 是 exe 自身的图标，两者用途不同）
            (str(TRAY_PNG), "qingdan/assets")],
     hiddenimports=HIDDEN + ["pystray", "pystray._win32", "PIL", "PIL._tkinter_finder"],

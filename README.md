@@ -15,6 +15,7 @@ Android 版为可独立离线使用的 **arm64 APK**，本地 SQLite 和业务�
 - 同步测试矩阵：[`docs/M5-同步测试矩阵.md`](docs/M5-同步测试矩阵.md)
 - API/CLI 访问控制：[`docs/API-CLI-访问控制方案.md`](docs/API-CLI-访问控制方案.md)
 - 0.4.0 规则与性能：[`docs/0.4.0-规则与性能设计.md`](docs/0.4.0-规则与性能设计.md)、[通知操作与验收](docs/通知操作设计与验收.md)
+- 版本更新与设备验收：[`docs/发布体验与设备验收.md`](docs/发布体验与设备验收.md)、[后续优化计划](docs/后续优化目标与执行计划.md)
 
 ---
 
@@ -47,6 +48,8 @@ Android 版为可独立离线使用的 **arm64 APK**，本地 SQLite 和业务�
 - **数据**：每日自动备份 + 手动快照、恢复（重启生效）、CSV / JSON / Markdown 导出、JSON 导入。
 - **界面**：亮 / 暗主题、6 套强调色、3 档字号、中 / 英双语（运行时切换，用户数据永不翻译）、
   左右面板可折叠（带过渡动画，尊重系统"减少动画"）、状态栏图标化计数。
+- **关于与更新**：设置中离线查看当前版本说明，手动检查 GitHub 最新稳定版并打开 Releases；
+  网络失败不影响本地功能，更新说明以纯文本展示，不自动下载或安装。此功能仅限本机，不开放远程 API。
 - **集成**：全部功能经 HTTP / CLI / Python 三种入口可达；远程 API 默认关闭、按需开启并带 Bearer 鉴权。
 
 ## 2. 快速开始
@@ -86,7 +89,11 @@ py -3.14 -m venv .venv
 .venv\Scripts\python.exe -m pytest -q                        # 全量回归测试
 ```
 
-**Windows 发布者提示**：当前 EXE 没有代码签名，Windows 是否显示提示取决于本机策略与文件信誉。
+**Windows 运行依赖与发布者提示**：界面需要 Microsoft Edge WebView2 Runtime。启动时确认缺失会显示中英双语引导，
+由你选择是否打开[微软下载页面](https://developer.microsoft.com/microsoft-edge/webview2/#download-section)；可在线安装 Evergreen Runtime，
+或下载匹配架构的 Standalone Installer 供离线电脑使用。应用不自动下载或安装 Runtime，缺失时不会初始化任务数据库。
+
+当前 EXE 没有代码签名，Windows 是否显示提示取决于本机策略与文件信誉。
 下载后可核对 Releases 中的 SHA-256。代码签名属于可选成本项，本项目不自动购买证书。
 不要用 onefile 版：每次启动解包到临时目录，杀软最敏感，托盘常驻程序被拦一次就收不到提醒了。
 

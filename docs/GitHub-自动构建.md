@@ -12,6 +12,8 @@ Android 并行使用 JDK 21、Gradle 9.6、AGP 9.5、Chaquopy 17.2 和 Python 3.
 先打包 arm64 发布版及 x86_64 测试版，再在 16 KB 页大小的 Android 17 QPR2 模拟器验证离线业务、Keystore 和 WebView 页面。
 模拟器配置 4 GB 内存；这是运行验收，不能用单纯生成 APK 代替。
 
+Android 作业还会从真实 v0.3.1 标签构建基线 emulatorDebug，创建 SQLite 标记任务后以当前包覆盖安装，验证数据未变，再检查锁屏/省电下的本地通知并真实重启模拟器。重启后、仪器测试初始化应用前，同步任务必须在 JobScheduler 看到对应 SystemJobService，本地提醒必须看到 SystemAlarmService；基线、当前包和测试包使用同一次 CI 的 debug 签名。四个定向阶段由 `scripts/verify_android_recovery.sh` 独立执行，普通套件中显式跳过以防重复，阶段日志、JSON、签名摘要及真实 PNG 统一进入 `android-test-results` Artifact。该证据不冒充真机、arm64 或正式固定签名升级验收。
+
 签名使用仓库 Actions Secrets 中的 `ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。
 私钥在本地 `.private/android-signing` 备份，禁止入 Git 或上传为公开产物；持续复用同一身份以便覆盖升级。
 未配置签名时仅做未签名验证，不发布 Release。Windows 导出的 PKCS12 在 CI 仅校正 Java 别名，不更换证书或私钥。

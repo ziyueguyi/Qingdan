@@ -1,0 +1,6 @@
+{
+  "0.4.0": {
+    "zh": "支持中国大陆 2026/2027 工作日规则：跳过非工作日或顺延到工作日。\n主列表、看板、日历与提醒记录分页查询，相邻页预加载。\nAndroid 通知支持打开、完成和稍后；Windows 气泡点击打开提醒记录。\n修复长历史重复任务推进与全天任务提醒时刻保留。\n设置新增关于与更新：离线版本说明、手动检查更新及 Releases 入口。\nWindows 缺少 WebView2 时提供微软安装引导，不自动下载或安装。\n所有同步设备升级后再启用新的工作日规则。",
+    "en": "Chinese 2026/2027 workday rules can skip or postpone non-working dates.\nTask lists, boards, calendar events and notification records use paging and prefetch.\nAndroid notifications offer open, complete and snooze; Windows balloon clicks open notification records.\nFixes long recurrence histories and preserves reminder times for all-day tasks.\nSettings now include offline release notes, explicit update checks and a Releases link.\nWindows guides users to Microsoft's WebView2 installer when the runtime is missing; nothing is downloaded or installed automatically.\nUpgrade all sync devices before enabling the new workday rules."
+  }
+}

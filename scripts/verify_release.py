@@ -49,6 +49,9 @@ def verify(release: Path) -> None:
         preview = command('task','repeat_preview','--repeat','FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR',
                           '--due-at','2026-11-13T09:00:00')
         assert preview['upcoming']
+        notes = command('call','app.release_info','--lang','zh')
+        assert notes['current_version'] and notes['current_notes']
+        assert notes['status']=='unchecked' and notes['latest_version'] is None
         failed = subprocess.run([str(cli),'--data-dir',str(data),'task','create','--title',''],
                                 capture_output=True,encoding='utf-8',timeout=30)
         assert failed.returncode==2
@@ -83,8 +86,8 @@ def verify(release: Path) -> None:
             with urllib.request.urlopen(url+'/api/v1/meta/features',timeout=2) as response:
                 features=json.load(response)['data']
             assert {'tag.get','group.get','task.repeat_preview','task.move'} <= features.keys()
-            def request(base,path,method='GET',body=None,key=None,context=None):
-                headers={'Content-Type':'application/json'}
+            def request(base,path,method='GET',body=None,key=None,context=None,extra=None):
+                headers={'Content-Type':'application/json',**(extra or {})}
                 if key: headers['Authorization']='Bearer '+key
                 req=urllib.request.Request(base+path,data=json.dumps(body).encode() if body is not None else None,
                                            headers=headers,method=method)
@@ -96,6 +99,11 @@ def verify(release: Path) -> None:
             _,issued=request(url,'/api/v1/access/tokens','POST',
                              {'name':'Release read-only','permissions':['read'],'features':['task.list']})
             secret=issued['data']['token']; token_id=issued['data']['item']['id']
+            code,local_notes=request(url,'/api/v1/app/release','POST',{'check':False,'lang':'zh'})
+            assert code==200 and local_notes['data']['current_notes']
+            code,denied=request(url,'/api/v1/app/release','POST',{'check':True},extra={
+                'Origin':'https://attacker.invalid','Sec-Fetch-Site':'cross-site'})
+            assert code==403 and denied['error']['code']=='ORIGIN_DENIED'
             with socket.socket() as probe:
                 probe.bind(('127.0.0.1',0)); remote_port=probe.getsockname()[1]
             remote_url=f'http://127.0.0.1:{remote_port}'
@@ -106,6 +114,10 @@ def verify(release: Path) -> None:
             assert request(remote_url,'/api/v1/tasks',key=secret)[0]==200
             assert request(remote_url,'/api/v1/tasks','POST',{'title':'Denied'},secret)[0]==403
             assert request(remote_url,'/api/v1/access/tokens',key=secret)[0]==403
+            _,full=request(url,'/api/v1/access/tokens','POST',{
+                'name':'Release local-only probe','permissions':['read','create','update','delete','execute'],'features':['*']})
+            assert request(remote_url,'/api/v1/app/release','POST',{'check':True},
+                           full['data']['token'])[0]==403
             assert request(url,f'/api/v1/access/tokens/{token_id}','PATCH',
                            {'permissions':['create'],'features':['task.create']})[0]==200
             assert request(remote_url,'/api/v1/tasks',key=secret)[0]==403

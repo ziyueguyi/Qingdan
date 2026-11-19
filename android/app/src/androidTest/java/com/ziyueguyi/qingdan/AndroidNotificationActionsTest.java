@@ -83,6 +83,18 @@ public class AndroidNotificationActionsTest {
             // A caller-supplied action must remain navigation-only.
             Intent open=new Intent(context(),MainActivity.class).putExtra(NotificationBridge.PAYLOAD,b.toString()).putExtra("notification_action","complete");
             try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(open)){
+                // A navigation discards evaluateJavascript callbacks from the
+                // initial blank document. Wait on native load state first;
+                // the assertions below still require real JS task selection.
+                AtomicReference<Boolean> loaded=new AtomicReference<>(false);
+                for(int i=0;i<120&&!loaded.get();i++){
+                    scenario.onActivity(activity->{
+                        android.webkit.WebView view=activity.getWebView();
+                        loaded.set(view.getProgress()==100&&view.getUrl()!=null&&view.getUrl().endsWith("/index.html"));
+                    });
+                    if(!loaded.get())Thread.sleep(500);
+                }
+                assertTrue("Notification Activity document did not finish loading",loaded.get());
                 boolean selected=false;
                 for(int i=0;i<100&&!selected;i++){
                     selected="true".equals(js(scenario,"Boolean(document.querySelector('#detail [data-id=\""+secondId+"\"]'))&&document.getElementById('app').classList.contains('phone-detail')"));

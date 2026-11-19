@@ -93,7 +93,8 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Includes a separate v0.3.1 emulatorDebug baseline build and a real reboot.
+    timeout-minutes: 60
     outputs:
       signed: ${{ steps.signing.outputs.signed }}
     env:
