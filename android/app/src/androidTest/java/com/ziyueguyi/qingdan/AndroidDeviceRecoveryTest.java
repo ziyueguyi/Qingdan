@@ -305,32 +305,35 @@ public class AndroidDeviceRecoveryTest {
     private JSONObject requirePeriodicWork() throws Exception {
         JSONObject result = new JSONObject();
         JSONObject systemJobs = null;
-        String jobDump = null;
+        String jobDump = null, alarmDump = null;
         for (String name : new String[]{"qingdan-alerts", "qingdan-sync"}) {
             List<WorkInfo> infos = null;
-            for (int attempt = 0; attempt < 60; attempt++) {
+            for (int attempt = 0; attempt < 120; attempt++) {
                 infos = WorkManager.getInstance(context()).getWorkInfosForUniqueWork(name).get();
-                if (!infos.isEmpty()) break;
+                boolean enqueued = !infos.isEmpty();
+                for (WorkInfo info : infos) enqueued &= info.getState() == WorkInfo.State.ENQUEUED;
+                // The first unconstrained alert run uses the in-process greedy
+                // scheduler. Its next alarm mapping exists only after it finishes.
+                if (enqueued) break;
                 Thread.sleep(500);
             }
             assertNotNull(infos);
             assertFalse("Missing periodic WorkManager registration: " + name, infos.isEmpty());
-            // The WorkManager future is the initialization barrier. Checking the
-            // database filename before this point races asynchronous enqueue.
+            for (WorkInfo info : infos) assertEquals(name + " must settle to ENQUEUED", WorkInfo.State.ENQUEUED, info.getState());
             if (systemJobs == null) {
                 systemJobs = systemJobIds();
                 jobDump = shell("dumpsys jobscheduler");
+                alarmDump = shell("dumpsys alarm");
             }
             JSONArray entries = new JSONArray();
             for (WorkInfo info : infos) {
-                assertNotEquals(name + " must not be cancelled", WorkInfo.State.CANCELLED, info.getState());
-                assertTrue(name + " must remain periodic/enqueued or running: " + info.getState(),
-                    info.getState() == WorkInfo.State.ENQUEUED || info.getState() == WorkInfo.State.RUNNING);
                 String workId = info.getId().toString();
                 assertTrue("Missing SystemIdInfo for " + name + "/" + workId, systemJobs.has(workId));
                 int systemJobId = systemJobs.getInt(workId);
-                assertSystemJob(jobDump, systemJobId, name);
+                if ("qingdan-sync".equals(name)) assertSystemJob(jobDump, systemJobId, name);
+                else assertSystemAlarm(alarmDump, name);
                 entries.put(new JSONObject().put("id", workId).put("system_job_id", systemJobId)
+                    .put("scheduler", "qingdan-sync".equals(name) ? "jobscheduler" : "alarm")
                     .put("state", info.getState().name()).put("run_attempt_count", info.getRunAttemptCount())
                     .put("tags", new JSONArray(info.getTags())));
             }
@@ -364,6 +367,19 @@ public class AndroidDeviceRecoveryTest {
             }
         }
         assertTrue("Missing Qingdan OS JobScheduler block for " + workName + "/" + systemJobId, found);
+    }
+
+    private void assertSystemAlarm(String dump, String workName) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?s)Alarm\\{.*?(?=Alarm\\{|\\z)").matcher(dump);
+        boolean found = false;
+        while (matcher.find()) {
+            String block = matcher.group();
+            if (block.contains(PACKAGE) && block.contains("androidx.work.impl.background.systemalarm.SystemAlarmService")) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue("Missing Qingdan SystemAlarmService alarm for " + workName, found);
     }
 
     private void awaitWorkSucceeded(UUID id) throws Exception {

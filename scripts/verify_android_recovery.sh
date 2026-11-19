@@ -152,6 +152,7 @@ run_stage verifyUpgrade upgrade-instrumentation.txt
 run_stage alertWorkerUnderLockAndPowerSaver alert-instrumentation.txt
 adb shell dumpsys power > "$RECOVERY_REPORT/power-before-reboot.txt"
 adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-before-reboot.txt"
+adb shell dumpsys alarm > "$RECOVERY_REPORT/alarm-before-reboot.txt"
 
 BOOT_BEFORE=$(adb shell getprop ro.boot.boot_id | tr -d '\r')
 [[ -n $BOOT_BEFORE ]] || { echo 'ro.boot.boot_id is required to prove reboot' >&2; exit 1; }
@@ -177,8 +178,10 @@ adb shell wm dismiss-keyguard
 # persisted WorkManager database row alone is not proof of boot rescheduling.
 for _ in $(seq 1 30); do
   adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt"
+  adb shell dumpsys alarm > "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt"
   if python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
       "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
+      "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt" \
       "$RECOVERY_REPORT/jobscheduler-verified.json" > "$RECOVERY_REPORT/jobscheduler-probe.log" 2>&1; then
     break
   fi
@@ -186,9 +189,11 @@ for _ in $(seq 1 30); do
 done
 python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
   "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
+  "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt" \
   "$RECOVERY_REPORT/jobscheduler-verified.json"
 run_stage verifyReboot reboot-instrumentation.txt
 adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-after-reboot.txt"
+adb shell dumpsys alarm > "$RECOVERY_REPORT/alarm-after-reboot.txt"
 adb shell dumpsys deviceidle > "$RECOVERY_REPORT/deviceidle-after-reboot.txt"
 adb exec-out screencap -p > "$RECOVERY_REPORT/reboot-screen.png"
 adb pull "$DEVICE_REPORT/." "$RECOVERY_REPORT/" >/dev/null
@@ -228,7 +233,9 @@ assert all(scheduled["jobs"][name] for name in scheduled["jobs"])
 for document in (baseline, reboot):
     for work_name in ("qingdan-alerts", "qingdan-sync"):
         entries = document["work"][work_name]
-        assert entries and all(item["state"] in {"ENQUEUED", "RUNNING"} for item in entries)
+        assert entries and all(item["state"] == "ENQUEUED" for item in entries)
+        expected_scheduler = "jobscheduler" if work_name == "qingdan-sync" else "alarm"
+        assert all(item["scheduler"] == expected_scheduler for item in entries)
 for name in ("locked-alert.png", "restored-screen.png", "reboot-screen.png"):
     path = root / name
     data = path.read_bytes() if path.is_file() else b""
@@ -244,7 +251,7 @@ summary = {
     "sqlite_survived_reboot": True,
     "locked_power_saver_alert": True,
     "periodic_work_after_reboot": ["qingdan-alerts", "qingdan-sync"],
-    "jobscheduler_present_before_post_reboot_instrumentation": True,
+    "sync_jobscheduler_and_alert_alarm_present_before_post_reboot_instrumentation": True,
     "physical_device_or_arm64_signature_upgrade_verified": False,
 }
 (root / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

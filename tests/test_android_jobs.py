@@ -29,6 +29,16 @@ def dump(second_package=jobs.PACKAGE,second_service=jobs.SERVICE):
 '''
 
 
+def alarm_dump():
+    return f'''RTC_WAKEUP #0: Alarm{{11111111 type 0 {jobs.PACKAGE}}}
+    tag=*walarm*:{jobs.ALARM_SERVICE}
+    package={jobs.PACKAGE}
+  RTC_WAKEUP #1: Alarm{{22222222 type 0 com.example.other}}
+    tag=*walarm*:com.example.other.OtherService
+    package=com.example.other
+'''
+
+
 def baseline(tmp_path):
     value={'work':{}}
     for name,job_id in [('qingdan-alerts',11),('qingdan-sync',22)]:
@@ -40,8 +50,8 @@ def baseline(tmp_path):
 @pytest.mark.parametrize('prefix',['JOB #','JOB androidx.work:#','JOB androidx.work:'])
 def test_two_periodic_workers_are_bound_to_their_os_job_blocks(tmp_path,monkeypatch,prefix):
     source=tmp_path/'jobs.txt';source.write_text(dump().replace('JOB #',prefix),encoding='utf-8')
-    output=tmp_path/'verified.json'
-    monkeypatch.setattr(sys,'argv',['verify_android_jobs.py',str(baseline(tmp_path)),str(source),str(output)])
+    output=tmp_path/'verified.json';alarms=tmp_path/'alarms.txt';alarms.write_text(alarm_dump(),encoding='utf-8')
+    monkeypatch.setattr(sys,'argv',['verify_android_jobs.py',str(baseline(tmp_path)),str(source),str(alarms),str(output)])
     jobs.main()
     result=json.loads(output.read_text(encoding='utf-8'))
     assert result['status']=='passed'
@@ -50,6 +60,7 @@ def test_two_periodic_workers_are_bound_to_their_os_job_blocks(tmp_path,monkeypa
 
 def test_unrelated_job_cannot_impersonate_the_sync_worker(tmp_path,monkeypatch):
     source=tmp_path/'jobs.txt';source.write_text(dump(second_service='com.example.OtherService'),encoding='utf-8')
-    monkeypatch.setattr(sys,'argv',['verify_android_jobs.py',str(baseline(tmp_path)),str(source),str(tmp_path/'verified.json')])
-    with pytest.raises(AssertionError,match='missing Qingdan OS job'):
+    alarms=tmp_path/'alarms.txt';alarms.write_text(alarm_dump(),encoding='utf-8')
+    monkeypatch.setattr(sys,'argv',['verify_android_jobs.py',str(baseline(tmp_path)),str(source),str(alarms),str(tmp_path/'verified.json')])
+    with pytest.raises(AssertionError,match='missing Qingdan OS schedule'):
         jobs.main()
