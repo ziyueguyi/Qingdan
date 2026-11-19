@@ -338,7 +338,7 @@ public class AndroidDeviceRecoveryTest {
         assertTrue("WorkManager database is missing: " + database, database.isFile());
         SQLiteDatabase db = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
         JSONObject result = new JSONObject();
-        try (Cursor cursor = db.rawQuery("SELECT work_spec_id,system_id FROM system_id_info", null)) {
+        try (Cursor cursor = db.rawQuery("SELECT work_spec_id,system_id FROM SystemIdInfo", null)) {
             while (cursor.moveToNext()) result.put(cursor.getString(0), cursor.getInt(1));
         } finally {
             db.close();
