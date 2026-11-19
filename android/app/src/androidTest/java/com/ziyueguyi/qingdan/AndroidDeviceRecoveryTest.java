@@ -104,9 +104,9 @@ public class AndroidDeviceRecoveryTest {
         boolean passed = false;
         try {
             // CI may run during the default 23:00-07:30 quiet hours; isolate this acceptance from DND.
-            JSONObject config = call("alert.config_update", new JSONObject().put("master", true)
+            JSONObject config = call("alert.config_update", new JSONObject().put("config", new JSONObject().put("master", true)
                 .put("silence_until", 0).put("channels", new JSONObject().put("toast", true))
-                .put("dnd", new JSONObject().put("enabled", false)).toString());
+                .put("dnd", new JSONObject().put("enabled", false))).toString());
             assertFalse(config.getJSONObject("dnd").getBoolean("enabled"));
             String due = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
                 .format(new Date(System.currentTimeMillis() - 30_000));
@@ -304,6 +304,8 @@ public class AndroidDeviceRecoveryTest {
 
     private JSONObject requirePeriodicWork() throws Exception {
         JSONObject result = new JSONObject();
+        JSONObject systemJobs = systemJobIds();
+        String jobDump = shell("dumpsys jobscheduler");
         for (String name : new String[]{"qingdan-alerts", "qingdan-sync"}) {
             List<WorkInfo> infos = null;
             for (int attempt = 0; attempt < 60; attempt++) {
@@ -318,13 +320,40 @@ public class AndroidDeviceRecoveryTest {
                 assertNotEquals(name + " must not be cancelled", WorkInfo.State.CANCELLED, info.getState());
                 assertTrue(name + " must remain periodic/enqueued or running: " + info.getState(),
                     info.getState() == WorkInfo.State.ENQUEUED || info.getState() == WorkInfo.State.RUNNING);
-                entries.put(new JSONObject().put("id", info.getId().toString())
+                String workId = info.getId().toString();
+                assertTrue("Missing SystemIdInfo for " + name + "/" + workId, systemJobs.has(workId));
+                int systemJobId = systemJobs.getInt(workId);
+                assertSystemJob(jobDump, systemJobId, name);
+                entries.put(new JSONObject().put("id", workId).put("system_job_id", systemJobId)
                     .put("state", info.getState().name()).put("run_attempt_count", info.getRunAttemptCount())
                     .put("tags", new JSONArray(info.getTags())));
             }
             result.put(name, entries);
         }
         return result;
+    }
+
+    private JSONObject systemJobIds() throws Exception {
+        File database = context().getDatabasePath("androidx.work.workdb");
+        assertTrue("WorkManager database is missing: " + database, database.isFile());
+        SQLiteDatabase db = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        JSONObject result = new JSONObject();
+        try (Cursor cursor = db.rawQuery("SELECT work_spec_id,system_id FROM system_id_info", null)) {
+            while (cursor.moveToNext()) result.put(cursor.getString(0), cursor.getInt(1));
+        } finally {
+            db.close();
+        }
+        return result;
+    }
+
+    private void assertSystemJob(String dump, int systemJobId, String workName) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
+            "(?ms)^\\s*JOB #\\S*/" + systemJobId + ":.*?(?=^\\s*JOB #|\\z)").matcher(dump);
+        assertTrue("Missing OS JobScheduler block for " + workName + "/" + systemJobId, matcher.find());
+        String block = matcher.group();
+        assertTrue("Wrong package in OS job for " + workName + ": " + block, block.contains(PACKAGE));
+        assertTrue("Wrong service in OS job for " + workName + ": " + block,
+            block.contains("androidx.work.impl.background.systemjob.SystemJobService"));
     }
 
     private void awaitWorkSucceeded(UUID id) throws Exception {

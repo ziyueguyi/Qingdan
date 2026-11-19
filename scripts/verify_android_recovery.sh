@@ -95,7 +95,7 @@ for apk in "$BASELINE_APK" "$CURRENT_APK" "$TEST_APK"; do
   "$APKSIGNER" verify --verbose --print-certs "$apk" >> "$RECOVERY_REPORT/signing.txt"
 done
 certificate_digest() {
-  "$APKSIGNER" verify --print-certs "$1" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}'
+  "$APKSIGNER" verify --print-certs "$1" | awk -F': ' '/certificate SHA-256 digest:/{print $NF; exit}'
 }
 BASELINE_CERT=$(certificate_digest "$BASELINE_APK")
 CURRENT_CERT=$(certificate_digest "$CURRENT_APK")
@@ -177,14 +177,16 @@ adb shell wm dismiss-keyguard
 # persisted WorkManager database row alone is not proof of boot rescheduling.
 for _ in $(seq 1 30); do
   adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt"
-  if grep -q "$PACKAGE" "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" && \
-     grep -q 'SystemJobService' "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt"; then
+  if python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
+      "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
+      "$RECOVERY_REPORT/jobscheduler-verified.json" > "$RECOVERY_REPORT/jobscheduler-probe.log" 2>&1; then
     break
   fi
   sleep 2
 done
-grep -q "$PACKAGE" "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt"
-grep -q 'SystemJobService' "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt"
+python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
+  "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
+  "$RECOVERY_REPORT/jobscheduler-verified.json"
 run_stage verifyReboot reboot-instrumentation.txt
 adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-after-reboot.txt"
 adb shell dumpsys deviceidle > "$RECOVERY_REPORT/deviceidle-after-reboot.txt"
@@ -219,8 +221,10 @@ assert alert["restored_power_save"] == alert["original_power_save"]
 assert alert["restored_interactive"] == alert["original_interactive"]
 assert alert["restored_keyguard"] is False
 assert baseline["boot_id"] != reboot["boot_id"]
-job_dump = (root / "jobscheduler-boot-before-instrumentation.txt").read_text(encoding="utf-8")
-assert "com.ziyueguyi.qingdan" in job_dump and "SystemJobService" in job_dump
+scheduled = json.loads((root / "jobscheduler-verified.json").read_text(encoding="utf-8"))
+assert scheduled["status"] == "passed"
+assert set(scheduled["jobs"]) == {"qingdan-alerts", "qingdan-sync"}
+assert all(scheduled["jobs"][name] for name in scheduled["jobs"])
 for document in (baseline, reboot):
     for work_name in ("qingdan-alerts", "qingdan-sync"):
         entries = document["work"][work_name]
