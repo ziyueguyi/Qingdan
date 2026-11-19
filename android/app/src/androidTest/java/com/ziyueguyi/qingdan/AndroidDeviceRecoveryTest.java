@@ -340,7 +340,7 @@ public class AndroidDeviceRecoveryTest {
     }
 
     private JSONObject systemJobIds() throws Exception {
-        File database = context().getDatabasePath("androidx.work.workdb");
+        File database = new File(context().getNoBackupFilesDir(), "androidx.work.workdb");
         assertTrue("WorkManager database is missing: " + database, database.isFile());
         SQLiteDatabase db = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
         JSONObject result = new JSONObject();
