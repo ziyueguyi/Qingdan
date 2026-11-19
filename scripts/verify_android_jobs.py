@@ -16,7 +16,7 @@ def main() -> None:
     baseline_path, dump_path, output_path = map(Path, sys.argv[1:4])
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     dump = dump_path.read_text(encoding="utf-8")
-    blocks = {int(match.group(1)): match.group(0) for match in JOB.finditer(dump)}
+    blocks = [(int(match.group(1)), match.group(0)) for match in JOB.finditer(dump)]
     verified = {}
     for name in EXPECTED:
         entries = baseline["work"][name]
@@ -24,9 +24,9 @@ def main() -> None:
         ids = []
         for entry in entries:
             job_id = entry["system_job_id"]
-            block = blocks.get(job_id)
-            assert block is not None, f"missing OS job after reboot: {name}/{job_id}"
-            assert PACKAGE in block and SERVICE in block, f"wrong OS job block: {name}/{job_id}: {block}"
+            candidates = [block for candidate_id, block in blocks if candidate_id == job_id
+                          and PACKAGE in block and SERVICE in block]
+            assert candidates, f"missing Qingdan OS job after reboot: {name}/{job_id}"
             ids.append(job_id)
         verified[name] = ids
     result = {"status": "passed", "scope": "after reboot and before post-reboot instrumentation", "jobs": verified}

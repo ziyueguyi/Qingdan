@@ -20,6 +20,12 @@ def dump(second_package=jobs.PACKAGE,second_service=jobs.SERVICE):
     {second_package}
     Service: {second_package}/{second_service}
     period=900000
+  JOB #u0a108/11: 33333333
+    com.android.providers.downloads
+    Service: com.android.providers.downloads/DownloadManager
+  JOB #u0a108/22: 44444444
+    com.android.providers.downloads
+    Service: com.android.providers.downloads/DownloadManager
 '''
 
 
@@ -45,5 +51,5 @@ def test_two_periodic_workers_are_bound_to_their_os_job_blocks(tmp_path,monkeypa
 def test_unrelated_job_cannot_impersonate_the_sync_worker(tmp_path,monkeypatch):
     source=tmp_path/'jobs.txt';source.write_text(dump(second_service='com.example.OtherService'),encoding='utf-8')
     monkeypatch.setattr(sys,'argv',['verify_android_jobs.py',str(baseline(tmp_path)),str(source),str(tmp_path/'verified.json')])
-    with pytest.raises(AssertionError,match='wrong OS job block'):
+    with pytest.raises(AssertionError,match='missing Qingdan OS job'):
         jobs.main()

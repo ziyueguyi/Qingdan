@@ -355,11 +355,15 @@ public class AndroidDeviceRecoveryTest {
     private void assertSystemJob(String dump, int systemJobId, String workName) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
             "(?ms)^\\s*JOB\\s+(?:[A-Za-z0-9_.-]+:)?#?\\S*/" + systemJobId + ":.*?(?=^\\s*JOB\\s|\\z)").matcher(dump);
-        assertTrue("Missing OS JobScheduler block for " + workName + "/" + systemJobId, matcher.find());
-        String block = matcher.group();
-        assertTrue("Wrong package in OS job for " + workName + ": " + block, block.contains(PACKAGE));
-        assertTrue("Wrong service in OS job for " + workName + ": " + block,
-            block.contains("androidx.work.impl.background.systemjob.SystemJobService"));
+        boolean found = false;
+        while (matcher.find()) {
+            String block = matcher.group();
+            if (block.contains(PACKAGE) && block.contains("androidx.work.impl.background.systemjob.SystemJobService")) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue("Missing Qingdan OS JobScheduler block for " + workName + "/" + systemJobId, found);
     }
 
     private void awaitWorkSucceeded(UUID id) throws Exception {
