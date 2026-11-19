@@ -134,7 +134,8 @@ public class AndroidDeviceRecoveryTest {
             workId = request.getId();
             WorkManager.getInstance(context()).enqueue(request);
             awaitWorkSucceeded(workId);
-            await("AlertWorker did not post the task notification", () -> notificationVisible(taskId, title), 60);
+            String alertTaskId = taskId;
+            await("AlertWorker did not post the task notification", () -> notificationVisible(alertTaskId, title), 60);
             evidence.put("task_id", taskId).put("work_id", workId.toString())
                 .put("alert_worker_succeeded", true).put("notification_active", true)
                 .put("notification_tag_prefix", "item:" + taskId + ":");
