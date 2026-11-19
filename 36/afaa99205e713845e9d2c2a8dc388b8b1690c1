@@ -1,0 +1,73 @@
+src/qingdan/bootstrap.py
+  s_7909b70258899a::t_68b2d665a4ccff 18
+src/qingdan/core/releases.py
+  s_7909b70258899a::t_e16931fdefe4e4 11,47,49,51
+  s_7909b70258899a::t_84f80b4a7c7167 5,50
+  s_7909b70258899a::t_68b2d665a4ccff 1-4,6-10,12-46,48,52-57
+  s_7909b70258899a::t_c4435369e589f7 58-60
+src/qingdan/core/release-notes.json
+  s_7909b70258899a::t_84f80b4a7c7167 1-6
+src/qingdan/shell/app.py
+  s_7909b70258899a::t_86514e74452ad1 96-106,186
+  s_7909b70258899a::t_66c8baed43c470 183-185
+tests/test_releases.py
+  s_7909b70258899a::t_d5c14694a88dcb 1-23,26-60,62-92
+  s_7909b70258899a::t_e16931fdefe4e4 24-25,61
+  s_7909b70258899a::t_031e483eb7aa48 93-95
+  s_7909b70258899a::t_9023bd0f4231d8 96-121
+tests/test_runtime_preflight.py
+  s_7909b70258899a::t_86514e74452ad1 41-58
+  s_7909b70258899a::t_2a2f2de45933e7 1-40
+  s_7909b70258899a::t_4a54e3c25dff76 59-61
+  s_7909b70258899a::t_f3c37be64743b2 62-86
+packaging/qingdan.spec
+  s_7909b70258899a::t_84f80b4a7c7167 97
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidSmokeTest.java
+  s_7909b70258899a::t_e16931fdefe4e4 39-41
+  s_7909b70258899a::t_b535ca9e2fc942 81-90
+src/qingdan/shell/runtime.py
+  s_7909b70258899a::t_2a2f2de45933e7 1-52
+src/qingdan/web/i18n.js
+  s_7909b70258899a::t_5cf98678072d43 10-16,292-298
+src/qingdan/core/access.py
+  s_7909b70258899a::t_68b2d665a4ccff 128
+docs/后续优化目标与执行计划.md
+  s_7909b70258899a::t_87904cff911431 13,15-21
+pyproject.toml
+  s_7909b70258899a::t_84f80b4a7c7167 31-33
+docs/发布体验与设备验收.md
+  s_7909b70258899a::t_87904cff911431 1-30
+  s_7909b70258899a::t_845c762d2c8315 31-33
+  s_7909b70258899a::t_4d8d6ec43976af 34
+src/qingdan/web/app.js
+  s_7909b70258899a::t_e16931fdefe4e4 670,689-690,1532,1543
+  s_7909b70258899a::t_5cf98678072d43 665-669,671-688,691-697,728,732,1545
+  s_7909b70258899a::t_e11b7d228a730c 1544
+  s_7909b70258899a::t_ade9a8ba3c8222 1546-1548
+android/app/src/main/java/com/ziyueguyi/qingdan/MainActivity.java
+  s_7909b70258899a::t_9bf0a62c028594 89-96
+docs/GitHub-自动构建.md
+  s_7909b70258899a::t_4cd6a457fab229 15-16
+scripts/verify_release.py
+  s_7909b70258899a::t_88ec203128648c 52-54,89-90,102-106,117-120
+docs/releases/0.4.0.md
+  s_7909b70258899a::t_4d15fb531ddea2 18-24
+scripts/verify_android.sh
+  s_7909b70258899a::t_4ef85774f9253f 4-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "36afaa99205e713845e9d2c2a8dc388b8b1690c1",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
