@@ -50,6 +50,18 @@ def _wait_healthy(port: int, timeout: float = 15.0) -> bool:
     return False
 
 
+def _renderer_failure(data_dir, runtime_status: dict, error: Exception) -> int:
+    """Report renderer load failures after the database and services are closed."""
+    if runtime_status.get('state') == 'not_applicable':
+        raise error
+    _write_status(data_dir, {'ok': False, 'error_code': 'WEBVIEW2_START_FAILED',
+                             'runtime': runtime_status,
+                             'error': f'{type(error).__name__}: {error}'})
+    from qingdan.shell.runtime import show_missing_runtime
+    show_missing_runtime()
+    return 1
+
+
 def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820) -> int:
     import uvicorn
     import webview
@@ -80,6 +92,17 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
         print(f"[shell] 已经有一个清单在运行（端口 {port}），本次不启动第二个实例。"
               f"同一份数据被两个进程写会重复提醒、版本戳也会撞车。", flush=True)
         return 0
+
+    from qingdan.shell.runtime import webview2_status, show_missing_runtime
+    runtime_status = webview2_status()
+    if runtime_status['state'] == 'missing':
+        _write_status(target, {'ok': False, 'error_code': 'WEBVIEW2_MISSING',
+                               'runtime': runtime_status})
+        try:
+            show_missing_runtime()
+        finally:
+            lock.release()
+        return 1
 
     init(data_dir)
 
@@ -154,8 +177,13 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
         else:
             print("[shell] 托盘不可用，通知退回 dialog 后端", flush=True)
 
+    renderer_error = None
     try:
         webview.start(on_ready, gui="edgechromium", debug=False)
+    except Exception as error:
+        # Registry access denial is not proof of absence. If the real renderer
+        # also fails, offer the same native repair guide instead of a silent crash.
+        renderer_error = error
     finally:
         remote.close()
         auto_sync.stop()
@@ -166,6 +194,8 @@ def run(data_dir: str | Path | None = None, width: int = 1280, height: int = 820
         if ctx.store is not None:
             ctx.store.close()
         lock.release()          # 正常退出要还锁；崩溃时由内核自己回收
+    if renderer_error is not None:
+        return _renderer_failure(ctx.data_dir, runtime_status, renderer_error)
     return 0
 
 

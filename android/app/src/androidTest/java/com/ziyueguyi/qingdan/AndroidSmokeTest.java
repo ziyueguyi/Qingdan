@@ -36,6 +36,9 @@ public class AndroidSmokeTest {
         assertEquals(15,schedule.getInt("minimum_interval_minutes"));assertTrue(schedule.getJSONObject("status").getLong("next_at")>0);
         call("autosync.config_set","{\"enabled\":false}");
         assertEquals("platform_unsupported",call("app.autostart_get","{}").getString("reason_key"));
+        JSONObject release=call("app.release_info","{\"lang\":\"en\"}");
+        assertEquals("unchecked",release.getString("status"));
+        assertTrue(release.getString("current_notes").contains("workday"));
         com.chaquo.python.Python.getInstance().getModule("builtins").callAttr("exec", """
             import tempfile
             from pathlib import Path
@@ -75,6 +78,16 @@ public class AndroidSmokeTest {
             for(int i=0;i<30;i++){if("true".equals(js(scenario,"document.body.innerText.includes('Android smoke task')"))){visible=true;break;}Thread.sleep(300);}
             assertTrue("Android bridge did not render saved task: "+js(scenario,"document.body.innerText.slice(-2500)"),visible);
             assertEquals("true",js(scenario,"document.documentElement.dataset.platform==='android'"));
+            // The bundled notes must be reachable through the real offline settings UI.
+            js(scenario,"document.querySelector('[data-act=open-settings]').click();true");
+            js(scenario,"document.querySelector('[data-act=settings-tab][data-tab=about]').click();true");
+            boolean aboutReady=false;
+            for(int i=0;i<60;i++){
+                if("true".equals(js(scenario,"Boolean(document.querySelector('[data-settings-page=about] pre')?.textContent.trim())"))){aboutReady=true;break;}Thread.sleep(250);
+            }
+            assertTrue("Offline release notes did not render",aboutReady);
+            assertEquals("true",js(scenario,"document.querySelector('[data-settings-page=about] a[href=\"https://github.com/ziyueguyi/Qingdan/releases\"]')!==null&&document.querySelector('[data-act=release-check]')!==null&&typeof QingdanAndroid.openExternal==='function'"));
+            js(scenario,"document.querySelector('[data-act=close-modal]').click();true");
             AtomicReference<String> systemBars=new AtomicReference<>();
             scenario.onActivity(a->{
                 android.view.View decor=a.getWindow().getDecorView();

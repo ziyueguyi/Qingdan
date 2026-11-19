@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 status=0
+# Targeted recovery stages build APKs but do not repeat connectedEmulatorDebugAndroidTest.
+bash scripts/verify_android_recovery.sh || status=$?
 adb shell rm -f /sdcard/Download/qingdan-notification-inbox.png
 gradle -p android connectedEmulatorDebugAndroidTest --stacktrace || status=$?
 diagnostics=android/app/build/reports/androidTests/diagnostics
