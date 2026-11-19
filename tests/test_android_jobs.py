@@ -31,8 +31,9 @@ def baseline(tmp_path):
     return path
 
 
-def test_two_periodic_workers_are_bound_to_their_os_job_blocks(tmp_path,monkeypatch):
-    source=tmp_path/'jobs.txt';source.write_text(dump(),encoding='utf-8')
+@pytest.mark.parametrize('prefix',['JOB #','JOB androidx.work:#','JOB androidx.work:'])
+def test_two_periodic_workers_are_bound_to_their_os_job_blocks(tmp_path,monkeypatch,prefix):
+    source=tmp_path/'jobs.txt';source.write_text(dump().replace('JOB #',prefix),encoding='utf-8')
     output=tmp_path/'verified.json'
     monkeypatch.setattr(sys,'argv',['verify_android_jobs.py',str(baseline(tmp_path)),str(source),str(output)])
     jobs.main()

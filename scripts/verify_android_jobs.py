@@ -9,7 +9,7 @@ import sys
 PACKAGE = "com.ziyueguyi.qingdan"
 SERVICE = "androidx.work.impl.background.systemjob.SystemJobService"
 EXPECTED = ("qingdan-alerts", "qingdan-sync")
-JOB = re.compile(r"(?ms)^[ \t]*JOB #\S*/(\d+):.*?(?=^[ \t]*JOB #|\Z)")
+JOB = re.compile(r"(?ms)^[ \t]*JOB\s+(?:[A-Za-z0-9_.-]+:)?#?\S*/(\d+):.*?(?=^[ \t]*JOB\s|\Z)")
 
 
 def main() -> None:

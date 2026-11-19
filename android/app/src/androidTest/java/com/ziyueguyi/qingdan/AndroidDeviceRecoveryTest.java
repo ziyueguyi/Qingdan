@@ -304,8 +304,8 @@ public class AndroidDeviceRecoveryTest {
 
     private JSONObject requirePeriodicWork() throws Exception {
         JSONObject result = new JSONObject();
-        JSONObject systemJobs = systemJobIds();
-        String jobDump = shell("dumpsys jobscheduler");
+        JSONObject systemJobs = null;
+        String jobDump = null;
         for (String name : new String[]{"qingdan-alerts", "qingdan-sync"}) {
             List<WorkInfo> infos = null;
             for (int attempt = 0; attempt < 60; attempt++) {
@@ -315,6 +315,12 @@ public class AndroidDeviceRecoveryTest {
             }
             assertNotNull(infos);
             assertFalse("Missing periodic WorkManager registration: " + name, infos.isEmpty());
+            // The WorkManager future is the initialization barrier. Checking the
+            // database filename before this point races asynchronous enqueue.
+            if (systemJobs == null) {
+                systemJobs = systemJobIds();
+                jobDump = shell("dumpsys jobscheduler");
+            }
             JSONArray entries = new JSONArray();
             for (WorkInfo info : infos) {
                 assertNotEquals(name + " must not be cancelled", WorkInfo.State.CANCELLED, info.getState());
@@ -348,7 +354,7 @@ public class AndroidDeviceRecoveryTest {
 
     private void assertSystemJob(String dump, int systemJobId, String workName) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-            "(?ms)^\\s*JOB #\\S*/" + systemJobId + ":.*?(?=^\\s*JOB #|\\z)").matcher(dump);
+            "(?ms)^\\s*JOB\\s+(?:[A-Za-z0-9_.-]+:)?#?\\S*/" + systemJobId + ":.*?(?=^\\s*JOB\\s|\\z)").matcher(dump);
         assertTrue("Missing OS JobScheduler block for " + workName + "/" + systemJobId, matcher.find());
         String block = matcher.group();
         assertTrue("Wrong package in OS job for " + workName + ": " + block, block.contains(PACKAGE));
