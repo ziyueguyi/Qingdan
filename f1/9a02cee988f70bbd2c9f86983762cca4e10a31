@@ -1,0 +1,21 @@
+docs/GitHub-自动构建.md
+  s_7909b70258899a::t_b6373206fd8571 15
+docs/发布体验与设备验收.md
+  s_7909b70258899a::t_43626160abde22 35-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f19a02cee988f70bbd2c9f86983762cca4e10a31",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
