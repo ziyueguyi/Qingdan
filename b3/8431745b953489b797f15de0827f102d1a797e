@@ -1,0 +1,16 @@
+android/app/src/androidTest/java/com/ziyueguyi/qingdan/AndroidDeviceRecoveryTest.java
+  h_756b7de6229b75 336,342,373-407
+scripts/verify_android_recovery.sh
+  h_756b7de6229b75 129,136-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b38431745b953489b797f15de0827f102d1a797e",
+  "prompts": {},
+  "humans": {
+    "h_756b7de6229b75": {
+      "author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
