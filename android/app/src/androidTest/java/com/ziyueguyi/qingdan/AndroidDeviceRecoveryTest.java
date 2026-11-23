@@ -184,8 +184,8 @@ public class AndroidDeviceRecoveryTest {
         try {
             assertExpectedCurrentVersion();
             JSONObject baseline = readJson("baseline.json");
-            String bootId = shell("getprop ro.boot.boot_id").trim();
-            assertFalse("boot id must be available", bootId.isEmpty());
+            String bootId = bootIdentity();
+            assertFalse("A reboot identity source must be readable", bootId.isEmpty());
             assertNotEquals("adb reboot must create a new boot", baseline.getString("boot_id"), bootId);
             JSONObject row = verifyMarkerRow(baseline);
             evidence.put("task_id", baseline.getString("task_id")).put("baseline_row", baseline.getJSONObject("row"))
@@ -213,7 +213,7 @@ public class AndroidDeviceRecoveryTest {
         return new JSONObject().put("phase", phase).put("package_name", PACKAGE)
             .put("version_name", versionName()).put("sdk_int", Build.VERSION.SDK_INT)
             .put("fingerprint", Build.FINGERPRINT).put("hardware", Build.HARDWARE)
-            .put("boot_id", shell("getprop ro.boot.boot_id").trim())
+            .put("boot_id", bootIdentity())
             .put("captured_at_ms", System.currentTimeMillis());
     }
 
@@ -302,38 +302,47 @@ public class AndroidDeviceRecoveryTest {
         return after;
     }
 
+    /**
+     * WorkManager 2.10 schedules every WorkSpec through SystemJobScheduler on API 23+;
+     * SystemAlarmService is only enabled below API 23. The OS proof for both periodic
+     * workers is therefore a persisted JobScheduler job bound to our SystemJobService.
+     * The unconstrained alert worker first runs on the in-process greedy scheduler;
+     * its SystemIdInfo row and OS job exist only after that run is rescheduled.
+     */
     private JSONObject requirePeriodicWork() throws Exception {
         JSONObject result = new JSONObject();
-        JSONObject systemJobs = null;
-        String jobDump = null, alarmDump = null;
         for (String name : new String[]{"qingdan-alerts", "qingdan-sync"}) {
             List<WorkInfo> infos = null;
-            for (int attempt = 0; attempt < 120; attempt++) {
+            JSONObject systemJobs = null;
+            String jobDump = null;
+            boolean ready = false;
+            for (int attempt = 0; attempt < 120 && !ready; attempt++) {
                 infos = WorkManager.getInstance(context()).getWorkInfosForUniqueWork(name).get();
-                boolean enqueued = !infos.isEmpty();
-                for (WorkInfo info : infos) enqueued &= info.getState() == WorkInfo.State.ENQUEUED;
-                // The first unconstrained alert run uses the in-process greedy
-                // scheduler. Its next alarm mapping exists only after it finishes.
-                if (enqueued) break;
-                Thread.sleep(500);
+                ready = !infos.isEmpty();
+                for (WorkInfo info : infos) ready &= info.getState() == WorkInfo.State.ENQUEUED;
+                if (ready) {
+                    systemJobs = systemJobIds();
+                    for (WorkInfo info : infos) ready &= systemJobs.has(info.getId().toString());
+                }
+                if (ready) {
+                    jobDump = shell("dumpsys jobscheduler");
+                    for (WorkInfo info : infos) {
+                        ready &= systemJobPresent(jobDump, systemJobs.getInt(info.getId().toString()));
+                    }
+                }
+                if (!ready) Thread.sleep(500);
             }
             assertNotNull(infos);
             assertFalse("Missing periodic WorkManager registration: " + name, infos.isEmpty());
             for (WorkInfo info : infos) assertEquals(name + " must settle to ENQUEUED", WorkInfo.State.ENQUEUED, info.getState());
-            if (systemJobs == null) {
-                systemJobs = systemJobIds();
-                jobDump = shell("dumpsys jobscheduler");
-                alarmDump = shell("dumpsys alarm");
-            }
             JSONArray entries = new JSONArray();
             for (WorkInfo info : infos) {
                 String workId = info.getId().toString();
                 assertTrue("Missing SystemIdInfo for " + name + "/" + workId, systemJobs.has(workId));
                 int systemJobId = systemJobs.getInt(workId);
-                if ("qingdan-sync".equals(name)) assertSystemJob(jobDump, systemJobId, name);
-                else assertSystemAlarm(alarmDump, name);
+                assertSystemJob(jobDump, systemJobId, name);
                 entries.put(new JSONObject().put("id", workId).put("system_job_id", systemJobId)
-                    .put("scheduler", "qingdan-sync".equals(name) ? "jobscheduler" : "alarm")
+                    .put("scheduler", "jobscheduler")
                     .put("state", info.getState().name()).put("run_attempt_count", info.getRunAttemptCount())
                     .put("tags", new JSONArray(info.getTags())));
             }
@@ -356,30 +365,37 @@ public class AndroidDeviceRecoveryTest {
     }
 
     private void assertSystemJob(String dump, int systemJobId, String workName) {
+        assertTrue("Missing Qingdan SystemJobService job for " + workName + "/" + systemJobId,
+            systemJobPresent(dump, systemJobId));
+    }
+
+    /** JobScheduler ids are per-uid ranges, so the numeric id alone never identifies a job. */
+    private boolean systemJobPresent(String dump, int systemJobId) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
             "(?ms)^\\s*JOB\\s+(?:[A-Za-z0-9_.-]+:)?#?\\S*/" + systemJobId + ":.*?(?=^\\s*JOB\\s|\\z)").matcher(dump);
-        boolean found = false;
         while (matcher.find()) {
             String block = matcher.group();
             if (block.contains(PACKAGE) && block.contains("androidx.work.impl.background.systemjob.SystemJobService")) {
-                found = true;
-                break;
+                return true;
             }
         }
-        assertTrue("Missing Qingdan OS JobScheduler block for " + workName + "/" + systemJobId, found);
+        return false;
     }
 
-    private void assertSystemAlarm(String dump, String workName) {
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?s)Alarm\\{.*?(?=Alarm\\{|\\z)").matcher(dump);
-        boolean found = false;
-        while (matcher.find()) {
-            String block = matcher.group();
-            if (block.contains(PACKAGE) && block.contains("androidx.work.impl.background.systemalarm.SystemAlarmService")) {
-                found = true;
-                break;
-            }
+    /**
+     * A reboot identity that does not depend on ro.boot.boot_id, which the Android 17
+     * emulator image does not export. The first readable source wins; the source name is
+     * part of the value so different sources are never compared as equal.
+     */
+    private String bootIdentity() throws Exception {
+        for (String[] source : new String[][]{
+            {"/proc/sys/kernel/random/boot_id", "cat /proc/sys/kernel/random/boot_id"},
+            {"ro.boot.boot_id", "getprop ro.boot.boot_id"},
+            {"boot_count", "settings get global boot_count"}}) {
+            String value = shell(source[1]).trim();
+            if (!value.isEmpty() && !"null".equals(value)) return source[0] + "=" + value;
         }
-        assertTrue("Missing Qingdan SystemAlarmService alarm for " + workName, found);
+        return "";
     }
 
     private void awaitWorkSucceeded(UUID id) throws Exception {

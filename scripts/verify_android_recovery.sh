@@ -152,15 +152,26 @@ run_stage verifyUpgrade upgrade-instrumentation.txt
 run_stage alertWorkerUnderLockAndPowerSaver alert-instrumentation.txt
 adb shell dumpsys power > "$RECOVERY_REPORT/power-before-reboot.txt"
 adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-before-reboot.txt"
+# WorkManager 2.10 enables SystemAlarmService only below API 23; the alarm dump is kept as
+# supporting evidence, while the gate below is the persisted JobScheduler job of each worker.
 adb shell dumpsys alarm > "$RECOVERY_REPORT/alarm-before-reboot.txt"
 
-BOOT_BEFORE=$(adb shell getprop ro.boot.boot_id | tr -d '\r')
-[[ -n $BOOT_BEFORE ]] || { echo 'ro.boot.boot_id is required to prove reboot' >&2; exit 1; }
+boot_identity() {
+  local value
+  value=$(adb shell cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '\r')
+  [[ -n $value ]] && { echo "/proc/sys/kernel/random/boot_id=$value"; return 0; }
+  value=$(adb shell getprop ro.boot.boot_id 2>/dev/null | tr -d '\r')
+  [[ -n $value ]] && { echo "ro.boot.boot_id=$value"; return 0; }
+  value=$(adb shell settings get global boot_count 2>/dev/null | tr -d '\r')
+  [[ -n $value && $value != null ]] && { echo "boot_count=$value"; return 0; }
+  return 1
+}
+BOOT_BEFORE=$(boot_identity) || { echo 'No reboot identity source is readable on this device.' >&2; exit 1; }
 adb reboot
 adb wait-for-device
 BOOT_AFTER=''
 for _ in $(seq 1 90); do
-  BOOT_AFTER=$(adb shell getprop ro.boot.boot_id 2>/dev/null | tr -d '\r' || true)
+  BOOT_AFTER=$(boot_identity 2>/dev/null || true)
   COMPLETED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
   [[ -n $BOOT_AFTER && $BOOT_AFTER != "$BOOT_BEFORE" && $COMPLETED == 1 ]] && break
   sleep 2
@@ -181,7 +192,6 @@ for _ in $(seq 1 30); do
   adb shell dumpsys alarm > "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt"
   if python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
       "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
-      "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt" \
       "$RECOVERY_REPORT/jobscheduler-verified.json" > "$RECOVERY_REPORT/jobscheduler-probe.log" 2>&1; then
     break
   fi
@@ -189,7 +199,6 @@ for _ in $(seq 1 30); do
 done
 python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
   "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
-  "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt" \
   "$RECOVERY_REPORT/jobscheduler-verified.json"
 run_stage verifyReboot reboot-instrumentation.txt
 adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-after-reboot.txt"
@@ -234,8 +243,8 @@ for document in (baseline, reboot):
     for work_name in ("qingdan-alerts", "qingdan-sync"):
         entries = document["work"][work_name]
         assert entries and all(item["state"] == "ENQUEUED" for item in entries)
-        expected_scheduler = "jobscheduler" if work_name == "qingdan-sync" else "alarm"
-        assert all(item["scheduler"] == expected_scheduler for item in entries)
+        # WorkManager 2.10 on API 23+ schedules every worker through SystemJobScheduler.
+        assert all(item["scheduler"] == "jobscheduler" for item in entries)
 for name in ("locked-alert.png", "restored-screen.png", "reboot-screen.png"):
     path = root / name
     data = path.read_bytes() if path.is_file() else b""
@@ -251,7 +260,9 @@ summary = {
     "sqlite_survived_reboot": True,
     "locked_power_saver_alert": True,
     "periodic_work_after_reboot": ["qingdan-alerts", "qingdan-sync"],
-    "sync_jobscheduler_and_alert_alarm_present_before_post_reboot_instrumentation": True,
+    "periodic_systemjobservice_jobs_present_before_post_reboot_instrumentation": True,
+    "reboot_identity_before": baseline["boot_id"],
+    "reboot_identity_after": reboot["boot_id"],
     "physical_device_or_arm64_signature_upgrade_verified": False,
 }
 (root / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
