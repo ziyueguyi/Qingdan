@@ -193,14 +193,14 @@ adb shell wm dismiss-keyguard
 for _ in $(seq 1 30); do
   adb shell dumpsys jobscheduler > "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt"
   adb shell dumpsys alarm > "$RECOVERY_REPORT/alarm-boot-before-instrumentation.txt"
-  if python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
+  if python scripts/verify_android_jobs.py "$RECOVERY_REPORT/upgrade.json" \
       "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
       "$RECOVERY_REPORT/jobscheduler-verified.json" > "$RECOVERY_REPORT/jobscheduler-probe.log" 2>&1; then
     break
   fi
   sleep 2
 done
-python scripts/verify_android_jobs.py "$RECOVERY_REPORT/baseline.json" \
+python scripts/verify_android_jobs.py "$RECOVERY_REPORT/upgrade.json" \
   "$RECOVERY_REPORT/jobscheduler-boot-before-instrumentation.txt" \
   "$RECOVERY_REPORT/jobscheduler-verified.json"
 run_stage verifyReboot reboot-instrumentation.txt
@@ -242,12 +242,20 @@ scheduled = json.loads((root / "jobscheduler-verified.json").read_text(encoding=
 assert scheduled["status"] == "passed"
 assert set(scheduled["jobs"]) == {"qingdan-alerts", "qingdan-sync"}
 assert all(scheduled["jobs"][name] for name in scheduled["jobs"])
-for document in (baseline, reboot):
-    for work_name in ("qingdan-alerts", "qingdan-sync"):
+for work_name in ("qingdan-alerts", "qingdan-sync"):
+    entries = baseline["work"][work_name]
+    assert entries and all(item["state"] == "ENQUEUED" for item in entries)
+    # v0.3.1 (WorkManager 2.10.1) may leave one periodic worker ENQUEUED without an OS job;
+    # the current version must re-register both on first open and keep them across reboot.
+    baseline_unscheduled = baseline["work"]["unscheduled"]
+    assert upgrade["baseline_unscheduled"] == baseline_unscheduled
+    assert upgrade["healed_after_open"] == (len(baseline_unscheduled) > 0)
+    for document in (upgrade, reboot):
         entries = document["work"][work_name]
         assert entries and all(item["state"] == "ENQUEUED" for item in entries)
-        # WorkManager 2.10 on API 23+ schedules every worker through SystemJobScheduler.
-        assert all(item["scheduler"] == "jobscheduler" for item in entries)
+        assert document["work"]["unscheduled"] == []
+        # WorkManager on API 23+ schedules every worker through SystemJobScheduler.
+        assert all(item["os_job"] is True and item["scheduler"] == "jobscheduler" for item in entries)
 for name in ("locked-alert.png", "restored-screen.png", "reboot-screen.png"):
     path = root / name
     data = path.read_bytes() if path.is_file() else b""
@@ -264,6 +272,8 @@ summary = {
     "locked_power_saver_alert": True,
     "periodic_work_after_reboot": ["qingdan-alerts", "qingdan-sync"],
     "periodic_systemjobservice_jobs_present_before_post_reboot_instrumentation": True,
+    "baseline_workers_unscheduled_after_v031_first_run": len(baseline["work"]["unscheduled"]),
+    "re_registered_on_first_open_after_upgrade": True,
     "reboot_identity_before": baseline["boot_id"],
     "reboot_identity_after": reboot["boot_id"],
     "physical_device_or_arm64_signature_upgrade_verified": False,

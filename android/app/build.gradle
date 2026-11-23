@@ -50,7 +50,9 @@ chaquopy {
 }
 dependencies {
     implementation 'androidx.webkit:webkit:1.12.1'
-    implementation 'androidx.work:work-runtime:2.10.1'
+    // 2.12.0 guards registerRescheduling with isWorkSpecScheduled: two periodic workers finishing
+    // together no longer leave one of them ENQUEUED without a JobScheduler job (2.10.1 race).
+    implementation 'androidx.work:work-runtime:2.12.0'
     implementation 'androidx.core:core:1.15.0'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test:core:1.6.1'

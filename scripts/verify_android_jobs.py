@@ -1,9 +1,10 @@
-"""Bind baseline WorkManager IDs to post-reboot OS JobScheduler blocks.
+"""Bind post-upgrade WorkManager ids to post-reboot OS JobScheduler blocks.
 
-WorkManager 2.10 schedules every WorkSpec through SystemJobScheduler on API 23+, so both
-periodic workers must be visible as persisted JobScheduler jobs after reboot, before any
-instrumentation can initialize the application. AlarmManager evidence is not part of this
-gate: SystemAlarmService is only enabled by WorkManager below API 23.
+The upgrade evidence carries the SystemIdInfo job ids observed after the overwrite install and
+first open of the current version. WorkManager schedules every WorkSpec through SystemJobScheduler
+on API 23+, so both periodic workers must be visible as persisted JobScheduler jobs after reboot,
+before any instrumentation can initialize the application. AlarmManager evidence is not part of
+this gate: SystemAlarmService is only enabled by WorkManager below API 23.
 """
 from __future__ import annotations
 
@@ -26,9 +27,9 @@ def main() -> None:
     verified = {}
     for name in EXPECTED:
         entries = baseline["work"][name]
-        assert entries, f"missing baseline WorkManager entries: {name}"
+        assert entries, f"missing post-upgrade WorkManager entries: {name}"
         assert all(entry["scheduler"] == "jobscheduler" for entry in entries), (
-            f"baseline scheduler evidence is not JobScheduler: {name}")
+            f"post-upgrade scheduler evidence is not JobScheduler: {name}")
         ids = []
         for entry in entries:
             job_id = entry["system_job_id"]

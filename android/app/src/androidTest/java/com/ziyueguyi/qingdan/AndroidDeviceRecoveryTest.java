@@ -63,8 +63,10 @@ public class AndroidDeviceRecoveryTest {
                 .put("due_at", "2037-01-31T09:00:00").toString());
             String id = task.getString("id");
             JSONObject row = taskRow(id);
+            // v0.3.1 ships WorkManager 2.10.1, whose rescheduling race can leave one periodic
+            // worker ENQUEUED without an OS job. The baseline records that; the upgrade must heal it.
             evidence.put("task_id", id).put("title", MARKER_TITLE).put("note", MARKER_NOTE)
-                .put("row", row).put("work", requirePeriodicWork());
+                .put("row", row).put("work", periodicWorkEvidence(false));
             passed = true;
         } finally {
             finish(evidence, "baseline.json", passed);
@@ -81,8 +83,16 @@ public class AndroidDeviceRecoveryTest {
             assertEquals("passed", baseline.getString("status"));
             assertEquals("0.3.1", baseline.getString("version_name"));
             JSONObject row = verifyMarkerRow(baseline);
+            // Opening the app after the overwrite install is the production re-registration path.
+            try (ActivityScenario<MainActivity> ignored = ActivityScenario.launch(MainActivity.class)) {
+                Thread.sleep(4000);
+            }
+            JSONObject work = periodicWorkEvidence(true);
+            JSONArray unscheduledInBaseline = baseline.getJSONObject("work").getJSONArray("unscheduled");
             evidence.put("task_id", baseline.getString("task_id")).put("baseline_row", baseline.getJSONObject("row"))
-                .put("row", row).put("sqlite_verified", true);
+                .put("row", row).put("sqlite_verified", true).put("work", work)
+                .put("baseline_unscheduled", unscheduledInBaseline)
+                .put("healed_after_open", unscheduledInBaseline.length() > 0);
             passed = true;
         } finally {
             finish(evidence, "upgrade.json", passed);
@@ -189,7 +199,7 @@ public class AndroidDeviceRecoveryTest {
             assertNotEquals("adb reboot must create a new boot", baseline.getString("boot_id"), bootId);
             JSONObject row = verifyMarkerRow(baseline);
             evidence.put("task_id", baseline.getString("task_id")).put("baseline_row", baseline.getJSONObject("row"))
-                .put("row", row).put("sqlite_verified", true).put("work", requirePeriodicWork());
+                .put("row", row).put("sqlite_verified", true).put("work", periodicWorkEvidence(true));
             passed = true;
         } finally {
             finish(evidence, "reboot.json", passed);
@@ -303,53 +313,66 @@ public class AndroidDeviceRecoveryTest {
     }
 
     /**
-     * WorkManager 2.10 schedules every WorkSpec through SystemJobScheduler on API 23+;
-     * SystemAlarmService is only enabled below API 23. The OS proof for both periodic
-     * workers is therefore a persisted JobScheduler job bound to our SystemJobService.
-     * The unconstrained alert worker first runs on the in-process greedy scheduler;
-     * its SystemIdInfo row and OS job exist only after that run is rescheduled.
+     * WorkManager schedules every WorkSpec through SystemJobScheduler on API 23+; SystemAlarmService
+     * is only enabled below API 23. The OS proof for a periodic worker is therefore a JobScheduler
+     * job bound to our SystemJobService whose id matches the WorkManager SystemIdInfo row. The
+     * unconstrained alert worker first runs on the in-process greedy scheduler, so its row and job
+     * exist only after that run is rescheduled. The result names every worker, and "unscheduled"
+     * lists those left ENQUEUED without an OS job (WorkManager 2.10.1's rescheduling race).
      */
-    private JSONObject requirePeriodicWork() throws Exception {
+    private JSONObject periodicWorkEvidence(boolean requireOsJobs) throws Exception {
         JSONObject result = new JSONObject();
+        JSONArray unscheduled = new JSONArray();
+        String jobDump = shell("dumpsys jobscheduler");
         for (String name : new String[]{"qingdan-alerts", "qingdan-sync"}) {
             List<WorkInfo> infos = null;
-            JSONObject systemJobs = null;
-            String jobDump = null;
-            boolean ready = false;
-            for (int attempt = 0; attempt < 120 && !ready; attempt++) {
+            JSONObject systemJobs = new JSONObject();
+            JSONObject observed = null;
+            for (int attempt = 0; attempt < 120 && observed == null; attempt++) {
                 infos = WorkManager.getInstance(context()).getWorkInfosForUniqueWork(name).get();
-                ready = !infos.isEmpty();
-                for (WorkInfo info : infos) ready &= info.getState() == WorkInfo.State.ENQUEUED;
-                if (ready) {
+                boolean enqueued = !infos.isEmpty();
+                for (WorkInfo info : infos) enqueued &= info.getState() == WorkInfo.State.ENQUEUED;
+                if (enqueued) {
                     systemJobs = systemJobIds();
-                    for (WorkInfo info : infos) ready &= systemJobs.has(info.getId().toString());
+                    if (jobDump == null) jobDump = shell("dumpsys jobscheduler");
+                    observed = workEntries(infos, systemJobs, jobDump);
+                    boolean allScheduled = observed.getJSONArray("unscheduled").length() == 0;
+                    if (!allScheduled) observed = null;
                 }
-                if (ready) {
-                    jobDump = shell("dumpsys jobscheduler");
-                    for (WorkInfo info : infos) {
-                        ready &= systemJobPresent(jobDump, systemJobs.getInt(info.getId().toString()));
-                    }
+                if (observed == null) {
+                    jobDump = null;
+                    Thread.sleep(500);
                 }
-                if (!ready) Thread.sleep(500);
             }
             assertNotNull(infos);
-            if (!ready) writeWorkDiagnostics(name, infos, jobDump == null ? shell("dumpsys jobscheduler") : jobDump);
             assertFalse("Missing periodic WorkManager registration: " + name, infos.isEmpty());
             for (WorkInfo info : infos) assertEquals(name + " must settle to ENQUEUED", WorkInfo.State.ENQUEUED, info.getState());
-            JSONArray entries = new JSONArray();
-            for (WorkInfo info : infos) {
-                String workId = info.getId().toString();
-                assertTrue("Missing SystemIdInfo for " + name + "/" + workId, systemJobs != null && systemJobs.has(workId));
-                int systemJobId = systemJobs.getInt(workId);
-                assertSystemJob(jobDump, systemJobId, name);
-                entries.put(new JSONObject().put("id", workId).put("system_job_id", systemJobId)
-                    .put("scheduler", "jobscheduler")
-                    .put("state", info.getState().name()).put("run_attempt_count", info.getRunAttemptCount())
-                    .put("tags", new JSONArray(info.getTags())));
+            if (observed == null) observed = workEntries(infos, systemJobIds(), jobDump == null ? shell("dumpsys jobscheduler") : jobDump);
+            JSONArray entries = observed.getJSONArray("entries");
+            JSONArray missing = observed.getJSONArray("unscheduled");
+            if (missing.length() > 0) {
+                writeWorkDiagnostics(name, infos, jobDump == null ? shell("dumpsys jobscheduler") : jobDump);
+                if (requireOsJobs) fail("Periodic worker has no SystemJobService job: " + name + "/" + missing);
+                for (int i = 0; i < missing.length(); i++) unscheduled.put(missing.getString(i));
             }
             result.put(name, entries);
         }
-        return result;
+        return result.put("unscheduled", unscheduled);
+    }
+
+    private JSONObject workEntries(List<WorkInfo> infos, JSONObject systemJobs, String jobDump) throws Exception {
+        JSONArray entries = new JSONArray(), unscheduled = new JSONArray();
+        for (WorkInfo info : infos) {
+            String workId = info.getId().toString();
+            int systemJobId = systemJobs.has(workId) ? systemJobs.getInt(workId) : -1;
+            boolean osJob = systemJobId >= 0 && systemJobPresent(jobDump, systemJobId);
+            if (!osJob) unscheduled.put(workId);
+            entries.put(new JSONObject().put("id", workId).put("system_job_id", systemJobId)
+                .put("os_job", osJob).put("scheduler", osJob ? "jobscheduler" : JSONObject.NULL)
+                .put("state", info.getState().name()).put("run_attempt_count", info.getRunAttemptCount())
+                .put("tags", new JSONArray(info.getTags())));
+        }
+        return new JSONObject().put("entries", entries).put("unscheduled", unscheduled);
     }
 
     private JSONObject systemJobIds() throws Exception {
@@ -363,11 +386,6 @@ public class AndroidDeviceRecoveryTest {
             db.close();
         }
         return result;
-    }
-
-    private void assertSystemJob(String dump, int systemJobId, String workName) {
-        assertTrue("Missing Qingdan SystemJobService job for " + workName + "/" + systemJobId,
-            systemJobPresent(dump, systemJobId));
     }
 
     /** Pulled into the CI artifact when readiness times out, so the next fix rests on evidence. */

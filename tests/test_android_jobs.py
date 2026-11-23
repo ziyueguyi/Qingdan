@@ -79,5 +79,5 @@ def test_unrelated_job_cannot_impersonate_the_sync_worker(tmp_path):
 
 def test_alarm_scheduler_evidence_is_rejected_for_both_workers(tmp_path):
     baseline(tmp_path,alert_scheduler='alarm')
-    with pytest.raises(AssertionError,match='baseline scheduler evidence is not JobScheduler: qingdan-alerts'):
+    with pytest.raises(AssertionError,match='post-upgrade scheduler evidence is not JobScheduler: qingdan-alerts'):
         run(tmp_path,dump())
