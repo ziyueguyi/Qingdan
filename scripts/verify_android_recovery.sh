@@ -126,12 +126,15 @@ run_stage() {
   local method=$1 log="$RECOVERY_REPORT/$2" result
   shift 2
   set +e
+  adb logcat -c >/dev/null 2>&1
   adb shell am instrument -w -r -e recovery_stage true \
     -e expected_version "$CURRENT_VERSION" -e class "$TEST_CLASS#$method" \
     "$PACKAGE.test/$RUNNER" "$@" > "$log" 2>&1
   result=$?
   set -e
   cat "$log"
+  # WorkManager's own log lines explain scheduling decisions; keep them per stage.
+  adb logcat -d -v threadtime 2>/dev/null | grep -E 'WM-[A-Za-z]+:|WM-' > "$RECOVERY_REPORT/workmanager-$2.log" || true
   adb pull "$DEVICE_REPORT/." "$RECOVERY_REPORT/" >/dev/null 2>&1 || true
   [[ $result -eq 0 ]] || { echo "Instrumentation $method exited $result" >&2; return "$result"; }
   grep -Eq 'OK \(1 test\)' "$log" || {

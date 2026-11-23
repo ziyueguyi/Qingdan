@@ -333,12 +333,13 @@ public class AndroidDeviceRecoveryTest {
                 if (!ready) Thread.sleep(500);
             }
             assertNotNull(infos);
+            if (!ready) writeWorkDiagnostics(name, infos, jobDump == null ? shell("dumpsys jobscheduler") : jobDump);
             assertFalse("Missing periodic WorkManager registration: " + name, infos.isEmpty());
             for (WorkInfo info : infos) assertEquals(name + " must settle to ENQUEUED", WorkInfo.State.ENQUEUED, info.getState());
             JSONArray entries = new JSONArray();
             for (WorkInfo info : infos) {
                 String workId = info.getId().toString();
-                assertTrue("Missing SystemIdInfo for " + name + "/" + workId, systemJobs.has(workId));
+                assertTrue("Missing SystemIdInfo for " + name + "/" + workId, systemJobs != null && systemJobs.has(workId));
                 int systemJobId = systemJobs.getInt(workId);
                 assertSystemJob(jobDump, systemJobId, name);
                 entries.put(new JSONObject().put("id", workId).put("system_job_id", systemJobId)
@@ -367,6 +368,41 @@ public class AndroidDeviceRecoveryTest {
     private void assertSystemJob(String dump, int systemJobId, String workName) {
         assertTrue("Missing Qingdan SystemJobService job for " + workName + "/" + systemJobId,
             systemJobPresent(dump, systemJobId));
+    }
+
+    /** Pulled into the CI artifact when readiness times out, so the next fix rests on evidence. */
+    private void writeWorkDiagnostics(String name, List<WorkInfo> infos, String jobDump) throws Exception {
+        File workDatabase = new File(context().getNoBackupFilesDir(), "androidx.work.workdb");
+        StringBuilder out = new StringBuilder("# WorkManager readiness diagnostics for ").append(name).append('\n');
+        for (WorkInfo info : infos) {
+            out.append("WorkInfo id=").append(info.getId()).append(" state=").append(info.getState())
+                .append(" run_attempt_count=").append(info.getRunAttemptCount()).append(" tags=").append(info.getTags()).append('\n');
+        }
+        out.append("# SystemIdInfo\n").append(tableDump(workDatabase,
+            "SELECT work_spec_id,generation,system_id FROM SystemIdInfo"));
+        out.append("# workspec\n").append(tableDump(workDatabase,
+            "SELECT id,state,schedule_requested_at,run_attempt_count,last_enqueue_time,period_count,generation,stop_reason,worker_class_name FROM workspec"));
+        out.append("# dumpsys jobscheduler blocks mentioning ").append(PACKAGE).append('\n');
+        for (String block : jobDump.split("(?m)(?=^\\s*JOB\\s)")) if (block.contains(PACKAGE)) out.append(block);
+        writeText("workmanager-" + name + ".txt", out.toString());
+    }
+
+    private String tableDump(File database, String sql) throws Exception {
+        if (!database.isFile()) return "# missing database: " + database + "\n";
+        SQLiteDatabase db = SQLiteDatabase.openDatabase(database.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        StringBuilder out = new StringBuilder();
+        try (Cursor cursor = db.rawQuery(sql, null)) {
+            while (cursor.moveToNext()) {
+                for (int i = 0; i < cursor.getColumnCount(); i++) {
+                    if (i > 0) out.append(" | ");
+                    out.append(cursor.getColumnName(i)).append('=').append(cursor.getString(i));
+                }
+                out.append('\n');
+            }
+        } finally {
+            db.close();
+        }
+        return out.toString();
     }
 
     /** JobScheduler ids are per-uid ranges, so the numeric id alone never identifies a job. */
