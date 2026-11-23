@@ -1,0 +1,21 @@
+android/app/build.gradle
+  s_7909b70258899a::t_3e92048b932e78 53-55
+docs/发布体验与设备验收.md
+  s_7909b70258899a::t_2b4d0120cf306c 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd72fed964335134b1dc3ce076b133249d50b6b2",
+  "prompts": {},
+  "sessions": {
+    "s_7909b70258899a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c827-866e-73e0-974a-7e5fc285e67f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "sxzhang1 <sxzhang1@leqee.com>"
+    }
+  }
+}
