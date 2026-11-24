@@ -86,6 +86,14 @@ public class MainActivity extends Activity {
                 runOnUiThread(()->{if(!isDestroyed())web.evaluateJavascript("window.qingdanNativeResult("+JSONObject.quote(id)+","+JSONObject.quote(reply)+")",null);});
             });
         }
+        @JavascriptInterface public void openExternal(String raw){
+            try {
+                Uri url=Uri.parse(raw);
+                // Only the fixed public Releases destination is exposed to JS.
+                if(!"https".equals(url.getScheme())||!"github.com".equals(url.getHost())||!"/ziyueguyi/Qingdan/releases".equals(url.getPath()))return;
+                startActivity(new Intent(Intent.ACTION_VIEW,url));
+            }catch(Exception ignored){}
+        }
         @JavascriptInterface public void shareFile(String path){
             try {
                 File file=new File(path).getCanonicalFile();File allowed=new File(getFilesDir(),"data/exports").getCanonicalFile();

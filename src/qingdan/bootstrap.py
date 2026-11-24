@@ -15,6 +15,7 @@ from qingdan.core import countdown as _countdown          # noqa: F401
 from qingdan.core import export as _export                # noqa: F401
 from qingdan.core import instance as _instance            # noqa: F401
 from qingdan.core import org as _org                      # noqa: F401
+from qingdan.core import releases as _releases            # noqa: F401
 from qingdan.core import service as _service              # noqa: F401
 from qingdan.core import sync_api as _sync_api            # noqa: F401
 from qingdan.core import views_api as _views_api          # noqa: F401

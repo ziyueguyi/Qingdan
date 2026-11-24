@@ -662,6 +662,39 @@ const DIR_SOURCE_KEY = {
 
 // --------------------------------------------------------------------------- 设置
 
+let releaseInfo = null, releaseChecking = false, releaseGeneration = 0;
+function renderAboutTab() {
+  const info=releaseInfo;
+  const messages={unchecked:'update_unchecked',available:'update_available',current:'update_current',failed:'update_failed'};
+  const failures={network:'update_network',rate_limit:'update_rate_limit',http:'update_http',invalid:'update_invalid'};
+  const notes=info?.current_notes || '';
+  return `<div class="settings-card"><p>${esc(t('update_current_version'))}: v${esc(info?.current_version||state.health?.version||'')}</p>
+    <p role="status">${esc(t(releaseChecking?'update_checking':messages[info?.status]||'update_unchecked'))}</p>
+    ${info?.latest_version?`<p>${esc(t('update_latest_version'))}: v${esc(info.latest_version)}</p>`:''}
+    ${info?.reason?`<p class="hint">${esc(t(failures[info.reason]||'update_failed'))}</p>`:''}
+    <button class="btn" data-act="release-check" ${releaseChecking?'disabled':''}>${esc(t('update_check'))}</button>
+    <a class="btn" href="https://github.com/ziyueguyi/Qingdan/releases" target="_blank" rel="noopener noreferrer" data-act="release-page">${esc(t('release_page'))}</a>
+    <p class="hint">${esc(t('update_manual'))}</p></div>
+    <div class="settings-card"><h3>${esc(t('update_notes'))}</h3><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto">${esc(notes)}</pre></div>
+    ${info?.latest_notes?`<div class="settings-card"><h3>${esc(t('update_latest_notes'))}</h3><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto">${esc(info.latest_notes)}</pre></div>`:''}`;
+}
+
+async function loadReleaseInfo(check=false) {
+  if(releaseChecking)return;
+  const generation=++releaseGeneration;
+  releaseChecking=check;
+  const visible=()=>!$('mask').hidden&&$('modal').querySelector('[data-settings-page="about"]');
+  if(visible())openSettings('about');
+  try {
+    const result=await call('app.release_info',{check,lang:locale()==='zh-CN'?'zh':'en'});
+    if(generation===releaseGeneration)releaseInfo=check?result:{...result,...releaseInfo,current_notes:result.current_notes,lang:result.lang};
+  } catch(error) {
+    if(generation===releaseGeneration)releaseInfo={...releaseInfo,status:'failed',reason:'network'};
+  } finally {
+    if(generation===releaseGeneration){releaseChecking=false;if(visible())openSettings('about');}
+  }
+}
+
 function openSettings(tab = "appearance") {
   // 页签键必须和这里的内容键完全一致 —— 曾经页签用 "lang"、内容键写 "language"，
   // 点进去直接渲染成 undefined。
@@ -692,10 +725,11 @@ function openSettings(tab = "appearance") {
     sync: renderSyncTab(),
     access: renderAccessTab(),
     cli: renderCliTab(),
+    about: renderAboutTab(),
   }[tab];
 
   const settingsTabs = [["appearance", "tab_appearance", "◐"], ["lang", "tab_lang", "◎"],
-    ["alert", "tab_alert", "♧"], ["data", "tab_data", "▤"], ["sync", "tab_sync", "↻"], ["access", "tab_access", "⌘"], ["cli", "tab_cli", ">_"]].filter(x=>!globalThis.QingdanAndroid||!['access','cli'].includes(x[0]));
+    ["alert", "tab_alert", "♧"], ["data", "tab_data", "▤"], ["sync", "tab_sync", "↻"], ["access", "tab_access", "⌘"], ["cli", "tab_cli", ">_"], ["about", "tab_about", "ⓘ"]].filter(x=>!globalThis.QingdanAndroid||!['access','cli'].includes(x[0]));
   openModal(`
     <div class="mh">${esc(t("settings"))}<button class="iconbtn" data-act="close-modal">✕</button></div>
     <div class="settings-layout"><nav class="tabs settings-nav" aria-label="${esc(t('settings'))}">${settingsTabs.map(([k, l, icon]) =>
@@ -1495,6 +1529,7 @@ async function onClick(ev) {
       if (tab === "sync") await loadSync();
       else if (tab === "access" || tab === "cli") await loadAccess();
       openSettings(tab || "appearance");
+      if(tab==='about')void loadReleaseInfo();
       break;
     case "settings-tab":
       if (tab !== 'access') clearAccessSecret();
@@ -1505,6 +1540,13 @@ async function onClick(ev) {
       else if (tab === "alert") await loadAlert();
       else if (tab === "access" || tab === "cli") await loadAccess();
       openSettings(tab);
+      if(tab==='about')void loadReleaseInfo();
+      break;
+    case "release-check": void loadReleaseInfo(true); break;
+    case "release-page":
+      // Desktop pywebview opens target=_blank in the system browser. Android's
+      // WebView does not create popup windows, so use an explicit native intent.
+      if(globalThis.QingdanAndroid){ev.preventDefault();globalThis.QingdanAndroid.openExternal(el.href);}
       break;
     case "sync-login": await doLogin(); break;
     case "sync-run": await doSync("sync.run"); break;

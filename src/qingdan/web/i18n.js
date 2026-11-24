@@ -7,6 +7,13 @@
 
 const DICT = {
   zh: {
+    tab_about:'关于与更新', update_current_version:'当前版本',update_latest_version:'最新稳定版本',
+    update_check:'检查更新',update_checking:'正在检查更新…',update_unchecked:'尚未检查更新',
+    update_available:'有新版本可用',update_current:'当前版本已是最新稳定版或更新',update_failed:'更新检查未完成',
+    update_network:'无法连接 GitHub，请检查网络后重试；离线功能不受影响。',update_rate_limit:'GitHub 请求受限，请稍后重试。',
+    update_http:'GitHub 暂未返回可用版本，请稍后重试。',update_invalid:'版本信息格式不支持，请前往发布页面查看。',
+    release_page:'前往发布页面',update_manual:'仅点击检查时访问 GitHub。下载和安装由你操作，不自动安装。',
+    update_notes:'当前版本更新说明',update_latest_notes:'最新稳定版本说明',
     notification_inbox:'提醒记录', notification_dismiss:'移除提醒记录',notification_snooze:'稍后 10 分钟',
     notification_stale:'任务已变化，请打开当前任务查看。',notification_inactive:'任务已完成或取消。',notification_unsupported:'此提醒不支持该操作。',
     notification_gone: '提醒对应的任务已删除或不存在。',
@@ -282,6 +289,13 @@ const DICT = {
     data_dir: "数据目录",
   },
   en: {
+    tab_about:'About & updates',update_current_version:'Current version',update_latest_version:'Latest stable version',
+    update_check:'Check for updates',update_checking:'Checking for updates…',update_unchecked:'Updates have not been checked',
+    update_available:'An update is available',update_current:'This version is up to date or newer',update_failed:'Update check did not finish',
+    update_network:'Cannot connect to GitHub. Check your network and retry; offline features remain available.',update_rate_limit:'GitHub rate limit reached. Try again later.',
+    update_http:'GitHub did not return an available release. Try again later.',update_invalid:'Unsupported release information. Visit the releases page.',
+    release_page:'Open releases page',update_manual:'GitHub is contacted only when you check. You choose what to download and install; installation is manual.',
+    update_notes:'Current release notes',update_latest_notes:'Latest stable release notes',
     notification_inbox:'Reminder inbox',notification_dismiss:'Dismiss reminder',notification_snooze:'Snooze 10 minutes',
     notification_stale:'This item changed. Open it to view the current version.',notification_inactive:'This task is completed or cancelled.',notification_unsupported:'This action is unavailable for this reminder.',
     notification_gone: 'The item for this reminder was deleted or no longer exists.',
