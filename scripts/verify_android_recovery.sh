@@ -43,6 +43,7 @@ cleanup() {
   adb shell cmd power set-mode 0 >/dev/null 2>&1
   adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
   adb shell wm dismiss-keyguard >/dev/null 2>&1
+  adb shell dumpsys battery reset >/dev/null 2>&1
   adb pull "$DEVICE_REPORT/." "$RECOVERY_REPORT/" >/dev/null 2>&1
   rm -rf "$WORKDIR"
   exit "$status"
@@ -123,7 +124,7 @@ grep -q Success "$RECOVERY_REPORT/install-test.txt"
 adb shell dumpsys package "$PACKAGE" > "$RECOVERY_REPORT/package-baseline.txt"
 
 run_stage() {
-  local method=$1 log="$RECOVERY_REPORT/$2" result
+  local method=$1 stage=$2 log="$RECOVERY_REPORT/$2" result
   shift 2
   set +e
   adb logcat -c >/dev/null 2>&1
@@ -134,7 +135,7 @@ run_stage() {
   set -e
   cat "$log"
   # WorkManager's own log lines explain scheduling decisions; keep them per stage.
-  adb logcat -d -v threadtime 2>/dev/null | grep -E 'WM-[A-Za-z]+:|WM-' > "$RECOVERY_REPORT/workmanager-$2.log" || true
+  adb logcat -d -v threadtime 2>/dev/null | grep -E 'WM-[A-Za-z]+:|WM-' > "$RECOVERY_REPORT/workmanager-$stage.log" || true
   adb pull "$DEVICE_REPORT/." "$RECOVERY_REPORT/" >/dev/null 2>&1 || true
   [[ $result -eq 0 ]] || { echo "Instrumentation $method exited $result" >&2; return "$result"; }
   grep -Eq 'OK \(1 test\)' "$log" || {

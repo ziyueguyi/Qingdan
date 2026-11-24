@@ -130,6 +130,11 @@ public class AndroidDeviceRecoveryTest {
             JSONObject rebuilt = call("alert.rebuild", "{}");
             assertTrue("A due local alert job must be rebuilt: " + rebuilt, rebuilt.getInt("jobs") >= 1);
 
+            // Battery Saver is refused while the emulator reports a full, plugged battery
+            // (CI dumpsys power: mIsPowered=true mBatteryLevel=100). Simulate a discharging
+            // battery for this stage only; the finally block and the script's trap restore it.
+            shell("dumpsys battery unplug");
+            shell("dumpsys battery set level 50");
             shell("cmd power set-mode 1");
             await("power saver was not enabled", () -> power.isPowerSaveMode(), 30);
             shell("input keyevent KEYCODE_SLEEP");
@@ -172,6 +177,7 @@ public class AndroidDeviceRecoveryTest {
             await("power saver state was not restored", () -> power.isPowerSaveMode() == originalSaver, 30);
             await("screen state was not restored", () -> power.isInteractive() == originalInteractive, 30);
             if (originalInteractive) await("keyguard was not restored", () -> !keyguard.isKeyguardLocked(), 30);
+            shell("dumpsys battery reset");
             evidence.put("restored_power_save", power.isPowerSaveMode())
                 .put("restored_interactive", power.isInteractive())
                 .put("restored_keyguard", keyguard.isKeyguardLocked())

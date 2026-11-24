@@ -3,6 +3,11 @@ set -euo pipefail
 status=0
 # Targeted recovery stages build APKs but do not repeat connectedEmulatorDebugAndroidTest.
 bash scripts/verify_android_recovery.sh || status=$?
+# The recovery stages leave marker and reminder tasks behind by design. The connected suite
+# must run on a clean install: AGP reinstalls with -r, which keeps application data, and a
+# leftover due reminder turns the offline alert into a summary notification.
+adb uninstall com.ziyueguyi.qingdan >/dev/null 2>&1 || true
+adb uninstall com.ziyueguyi.qingdan.test >/dev/null 2>&1 || true
 adb shell rm -f /sdcard/Download/qingdan-notification-inbox.png
 gradle -p android connectedEmulatorDebugAndroidTest --stacktrace || status=$?
 diagnostics=android/app/build/reports/androidTests/diagnostics
